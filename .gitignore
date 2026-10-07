@@ -1,0 +1,74 @@
+# JavaScript dependencies and package-manager caches
+node_modules/
+/.npm/
+/.pnpm-store/
+/.yarn/cache/
+/.yarn/install-state.gz
+
+# Frontend build, coverage and test reports
+/dist/
+/dist-ssr/
+/release/
+/coverage/
+/.vite/
+/test-results/
+/playwright-report/
+/blob-report/
+*.tsbuildinfo
+*.lcov
+
+# Rust and Tauri generated output
+target/
+/src-tauri/gen/schemas/
+
+# Logs, diagnostics and crash dumps
+/logs/
+*.log
+*-debug.log*
+*-error.log*
+*.dmp
+*.stackdump
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+.envrc
+/.direnv/
+
+# Editor-specific state (keep shared extension recommendations)
+/.vscode/*
+!/.vscode/extensions.json
+/.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.Spotlight-V100/
+.Trashes/
+
+# Repository-local temporary files
+/.tmp/
+/.playwright-mcp/
+/tmp/
+/temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# AI
+StartClaudeCode-Full.bat

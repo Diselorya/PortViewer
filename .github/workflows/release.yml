@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows artifacts
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.96.1
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: cargo test --manifest-path web-service/Cargo.toml
+      - run: cargo build --manifest-path web-service/Cargo.toml
+      - run: npm run test:lan-interfaces
+      - run: cargo build --release --manifest-path web-service/Cargo.toml
+      - run: npm run build:installer:online
+      - name: Package artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release/web-assets | Out-Null
+          Copy-Item web-service/target/release/portviewer-web.exe release/
+          Copy-Item dist/* release/web-assets/ -Recurse
+          Copy-Item README.md,LICENSE,SECURITY.md release/
+          Compress-Archive -Path release/portviewer-web.exe,release/web-assets,release/README.md,release/LICENSE,release/SECURITY.md -DestinationPath PortViewer-WebGUI-windows-x64.zip
+          $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $installer) { throw "NSIS installer was not produced" }
+          Copy-Item $installer.FullName ./PortViewer-windows-x64-setup.exe
+          Get-FileHash PortViewer-WebGUI-windows-x64.zip,PortViewer-windows-x64-setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content SHA256SUMS-windows.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            PortViewer-WebGUI-windows-x64.zip
+            PortViewer-windows-x64-setup.exe
+            SHA256SUMS-windows.txt
+
+  linux:
+    name: Linux WebGUI artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.96.1
+      - run: npm ci
+      - run: npm run build
+      - run: cargo test --manifest-path web-service/Cargo.toml
+      - run: cargo build --manifest-path web-service/Cargo.toml
+      - run: npm run test:lan-interfaces
+      - run: cargo build --release --manifest-path web-service/Cargo.toml
+      - name: Package artifact
+        run: |
+          mkdir -p package/web-assets
+          cp web-service/target/release/portviewer-web package/
+          cp -R dist/. package/web-assets/
+          cp README.md LICENSE SECURITY.md package/
+          tar -C package -czf PortViewer-WebGUI-linux-x64.tar.gz .
+          sha256sum PortViewer-WebGUI-linux-x64.tar.gz > SHA256SUMS-linux.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            PortViewer-WebGUI-linux-x64.tar.gz
+            SHA256SUMS-linux.txt
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes
+          gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber

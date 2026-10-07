@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: PortViewer LAN Port API
+  version: 1.0.0
+  description: LAN-only read API. Anonymous responses contain occupancy only; Bearer authentication unlocks endpoint details.
+servers:
+  - url: http://127.0.0.1:17890
+paths:
+  /api/health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /api/v1/ports/check:
+    get:
+      operationId: checkPorts
+      parameters:
+        - name: ports
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 4096
+          examples:
+            single: { value: "3000" }
+            listAndRange: { value: "80,443,3000-3010" }
+        - name: protocol
+          in: query
+          schema:
+            $ref: "#/components/schemas/ProtocolSelector"
+        - name: details
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Requires Bearer authentication when true.
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Occupancy results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Busy" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/ServerError" }
+        "504": { $ref: "#/components/responses/ServerError" }
+  /api/v1/ports/free:
+    post:
+      operationId: findFreePort
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreePortRequest"
+      responses:
+        "200":
+          description: A currently bindable advisory port
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreePortResponse"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Busy" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "504": { $ref: "#/components/responses/ServerError" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing or invalid Bearer Token
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Busy:
+      description: A scan is already running or no free port was found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    ServerError:
+      description: Scan failed, timed out, or required server configuration is unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    ProtocolSelector:
+      type: string
+      enum: [tcp, udp, both]
+      default: tcp
+    Health:
+      type: object
+      required: [status, service, platform, mode, apiVersion, tokenDetailsConfigured]
+      properties:
+        status: { const: ok }
+        service: { const: portviewer-web }
+        platform: { type: string }
+        mode: { type: string }
+        apiVersion: { const: 1 }
+        tokenDetailsConfigured: { type: boolean }
+    CheckResponse:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, detailLevel, checkedAt, scanComplete, requestedPorts, requestedProtocol, results]
+      properties:
+        apiVersion: { const: 1 }
+        detailLevel: { type: string, enum: [basic, detailed] }
+        checkedAt: { type: string }
+        scanComplete: { type: boolean }
+        requestedPorts:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 65535 }
+        requestedProtocol: { $ref: "#/components/schemas/ProtocolSelector" }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/PortStatus" }
+        scanWarnings:
+          type: array
+          items: { type: object, additionalProperties: true }
+    PortStatus:
+      type: object
+      additionalProperties: false
+      required: [port, protocol, status, occupied]
+      properties:
+        port: { type: integer, minimum: 1, maximum: 65535 }
+        protocol: { type: string, enum: [tcp, udp] }
+        status: { type: string, enum: [occupied, available, indeterminate] }
+        occupied: { type: [boolean, "null"] }
+        endpointCount: { type: integer, minimum: 0 }
+        isListening: { type: boolean }
+        endpoints:
+          type: array
+          items: { type: object, additionalProperties: true }
+    FreePortRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        protocol: { $ref: "#/components/schemas/ProtocolSelector" }
+        minPort: { type: integer, minimum: 30001, maximum: 65535, default: 30001 }
+        maxPort: { type: integer, minimum: 30001, maximum: 65535, default: 49151 }
+    FreePortResponse:
+      type: object
+      additionalProperties: false
+      required: [apiVersion, port, protocol, minPort, maxPort, checkedAt, attempts, advisoryOnly, advisory]
+      properties:
+        apiVersion: { const: 1 }
+        port: { type: integer, minimum: 30001, maximum: 65535 }
+        protocol: { $ref: "#/components/schemas/ProtocolSelector" }
+        minPort: { type: integer }
+        maxPort: { type: integer }
+        checkedAt: { type: string }
+        attempts: { type: integer, minimum: 1 }
+        advisoryOnly: { const: true }
+        advisory: { type: string }
+    Error:
+      type: object
+      required: [code, error]
+      properties:
+        code: { type: string }
+        error: { type: string, maxLength: 500 }

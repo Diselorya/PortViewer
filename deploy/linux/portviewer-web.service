@@ -1,0 +1,28 @@
+[Unit]
+Description=PortViewer local read-only WebGUI
+After=network.target
+
+[Service]
+Type=simple
+User=portviewer
+Group=portviewer
+WorkingDirectory=/opt/portviewer
+ExecStart=/opt/portviewer/portviewer-web --listen 127.0.0.1:17890 --assets /opt/portviewer/web-assets
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

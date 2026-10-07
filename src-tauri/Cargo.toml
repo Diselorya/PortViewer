@@ -1,0 +1,52 @@
+[package]
+name = "portviewer-app"
+version = "1.0.0"
+description = "PortViewer - Windows network port monitoring tool"
+authors = ["PortViewer Team"]
+license = "MIT"
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "portviewer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[features]
+default = []
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+quick-xml = "0.41"
+regex = "1"
+tauri-plugin-log = "2"
+tauri-plugin-dialog = "2"
+
+[dependencies.windows]
+version = "0.61"
+features = [
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_Networking_WinSock",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Services",
+    "Win32_System_SystemInformation",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Wdk_System_Threading",
+]

@@ -1,0 +1,51 @@
+name: Bug 报告
+description: 报告可复现的软件缺陷
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: "安全漏洞请使用 Security 私密报告，不要公开主机端口、用户名、路径或利用细节。"
+  - type: input
+    id: version
+    attributes:
+      label: PortViewer 版本
+      placeholder: "例如 1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: 运行方式
+      options:
+        - Windows 桌面版
+        - Windows WebGUI
+        - Linux WebGUI
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请提供最小、可重复的步骤并对诊断数据脱敏。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已搜索现有 Issue，并移除了凭据与个人信息。
+          required: true

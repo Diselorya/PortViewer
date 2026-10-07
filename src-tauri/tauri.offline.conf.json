@@ -1,0 +1,13 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "targets": ["msi"],
+    "windows": {
+      "minimumWebview2Version": "98.0.1108.43",
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": false
+      }
+    }
+  }
+}

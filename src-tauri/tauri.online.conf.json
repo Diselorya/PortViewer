@@ -1,0 +1,22 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "targets": ["nsis"],
+    "windows": {
+      "minimumWebview2Version": "98.0.1108.43",
+      "webviewInstallMode": {
+        "type": "embedBootstrapper",
+        "silent": false
+      },
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "customLanguageFiles": {
+          "SimpChinese": "windows/languages/SimpChinese.nsh",
+          "English": "windows/languages/English.nsh"
+        }
+      }
+    }
+  }
+}

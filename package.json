@@ -1,0 +1,56 @@
+{
+  "name": "portviewer",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "identity:generate": "node scripts/generate-build-identity.mjs",
+    "identity:finalize": "node scripts/generate-build-identity.mjs --finalize",
+    "dev": "npm run identity:generate && vite",
+    "typecheck": "npm run identity:generate && npm run typecheck:raw",
+    "typecheck:raw": "vue-tsc -b --pretty false",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:build-guard": "node scripts/test-build-guard.mjs",
+    "qa:manifest": "node scripts/generate-authored-manifest.mjs",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.{ts,vue,css}\" \"scripts/**/*.mjs\" \"*.{ts,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,vue,css}\" \"scripts/**/*.mjs\" \"*.{ts,json}\"",
+    "build": "npm run identity:generate && npm run typecheck:raw && vite build && npm run identity:finalize",
+    "build:desktop": "tauri build --no-bundle --features custom-protocol",
+    "dev:web": "npm run build && cargo run --manifest-path web-service/Cargo.toml -- --assets dist",
+    "build:web": "npm run build && cargo build --release --manifest-path web-service/Cargo.toml",
+    "test:web": "cargo test --manifest-path web-service/Cargo.toml",
+    "test:lan-interfaces": "node scripts/test-lan-interfaces.mjs",
+    "build:installer": "npm run build:installer:online",
+    "build:installer:online": "tauri build --features custom-protocol --bundles nsis --config src-tauri/tauri.online.conf.json",
+    "build:installer:offline": "tauri build --features custom-protocol --bundles msi --config src-tauri/tauri.offline.conf.json",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@primevue/themes": "^4.5.4",
+    "@tauri-apps/api": "^2.11.1",
+    "pinia": "^3.0.4",
+    "primevue": "^4.5.5",
+    "vue": "^3.5.39"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/node": "^24.13.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/coverage-v8": "3.2.7",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.9.1",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.3.5"
+  },
+  "overrides": {
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26"
+  }
+}

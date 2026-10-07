@@ -1,0 +1,7 @@
+dist/
+node_modules/
+src-tauri/
+src/generated/buildIdentity.ts
+public/portviewer-build-identity.json
+docs/
+skills/

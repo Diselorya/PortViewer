@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Windows / Node and Rust
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+      - name: Run frontend tests
+        run: npm run test:coverage
+
+      - name: Check frontend formatting
+        run: npm run format:check
+
+      - name: Check frontend types
+        run: npm run typecheck
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Verify desktop build guard failures
+        run: npm run test:build-guard
+
+      - name: Install Rust dependency auditor
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Verify ignored Rust advisory is outside the Windows graph
+        shell: pwsh
+        run: |
+          $tree = cargo tree --manifest-path src-tauri/Cargo.toml --target x86_64-pc-windows-msvc -i rkyv@0.7.46 2>&1
+          $active = $tree | Select-String '^rkyv v0\.7\.46'
+          if ($active) { throw "RUSTSEC-2026-0235 entered the Windows dependency graph: $tree" }
+
+      - name: Audit Rust dependencies
+        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2026-0235
+
+      - name: Audit WebGUI Rust dependencies
+        run: cargo audit --file web-service/Cargo.lock --ignore RUSTSEC-2026-0235
+
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Run Rust tests
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Run Clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check WebGUI Rust formatting
+        run: cargo fmt --manifest-path web-service/Cargo.toml --all -- --check
+
+      - name: Run WebGUI Rust tests
+        run: cargo test --manifest-path web-service/Cargo.toml
+
+      - name: Build WebGUI debug binary for interface E2E
+        run: cargo build --manifest-path web-service/Cargo.toml
+
+      - name: Test LAN API, CLI and MCP interfaces
+        run: npm run test:lan-interfaces
+
+      - name: Run WebGUI Clippy
+        run: cargo clippy --manifest-path web-service/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build bound desktop release
+        run: npm run build:desktop
+
+      - name: Build online installer
+        run: npm run build:installer:online
+
+  web-linux:
+    name: Linux / WebGUI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install and build frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.96.1
+        with:
+          components: rustfmt, clippy
+
+      - name: Check WebGUI formatting
+        run: cargo fmt --manifest-path web-service/Cargo.toml --all -- --check
+
+      - name: Test Linux WebGUI
+        run: cargo test --manifest-path web-service/Cargo.toml
+
+      - name: Build Linux WebGUI debug binary for interface E2E
+        run: cargo build --manifest-path web-service/Cargo.toml
+
+      - name: Test Linux LAN API, CLI and MCP interfaces
+        run: npm run test:lan-interfaces
+
+      - name: Lint Linux WebGUI
+        run: cargo clippy --manifest-path web-service/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build Linux WebGUI release
+        run: cargo build --release --manifest-path web-service/Cargo.toml
