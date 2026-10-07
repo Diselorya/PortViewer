@@ -1,0 +1,40 @@
+name: 功能建议
+description: 提出新功能或改进想法
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢提出功能建议！请先阅读 README 的"非目标"一节，确认建议不在明确排除的范围内（抓包、协议解析、流量统计、防火墙管理、恶意进程判断、任意公网主机扫描、长期历史、告警等）。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 这个功能解决了什么痛点？你在什么场景下需要它？
+      placeholder: 例如：排查端口占用时，我还需要……
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: 期望的解决方案
+      description: 你希望 PortViewer 如何表现？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案
+      description: 你用过哪些其他工具或方法绕过这个问题？为什么不满意？
+  - type: dropdown
+    id: area
+    attributes:
+      label: 相关区域
+      options:
+        - Windows 桌面版
+        - WebGUI（浏览器界面）
+        - 局域网 API / CLI / MCP
+        - 文档
+        - 其他
+    validations:
+      required: true

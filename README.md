@@ -4,8 +4,8 @@
 
 **Find which port is whose — and which are still free — without touching a terminal.**
 
-[![CI](https://github.com/your-username/PortViewer/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/PortViewer/actions/workflows/ci.yml)
-[![Release](https://github.com/your-username/PortViewer/actions/workflows/release.yml/badge.svg)](https://github.com/your-username/PortViewer/actions/workflows/release.yml)
+[![CI](https://github.com/Diselorya/PortViewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Diselorya/PortViewer/actions/workflows/ci.yml)
+[![Release](https://github.com/Diselorya/PortViewer/actions/workflows/release.yml/badge.svg)](https://github.com/Diselorya/PortViewer/actions/workflows/release.yml)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20%7C%20Linux%20%28WebGUI%29-blue)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -38,7 +38,7 @@ The desktop app has **no accounts, no backend services and no telemetry** — it
 
 ## Install
 
-Grab the latest artifacts from [Releases](https://github.com/your-username/PortViewer/releases):
+Grab the latest artifacts from [Releases](https://github.com/Diselorya/PortViewer/releases):
 
 | Artifact | What it is |
 |---|---|
@@ -53,7 +53,7 @@ Requirements: Windows 10/11 x64 with the [Microsoft Edge WebView2 Runtime](https
 Prerequisites: Node.js 22 + npm, Rust stable (`x86_64-pc-windows-msvc`), Visual Studio 2022 Build Tools with "Desktop development with C++" and the Windows SDK.
 
 ```powershell
-git clone https://github.com/your-username/PortViewer.git
+git clone https://github.com/Diselorya/PortViewer.git
 cd PortViewer
 npm ci
 

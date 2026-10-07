@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "PortViewer - Windows network port monitoring tool"
 authors = ["PortViewer Team"]
 license = "MIT"
-repository = ""
+repository = "https://github.com/Diselorya/PortViewer"
 edition = "2021"
 rust-version = "1.77.2"
 
