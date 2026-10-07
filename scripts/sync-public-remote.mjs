@@ -32,6 +32,9 @@ const lineFilter =
 const filteredTexts = ["README.md", "README.zh-CN.md"];
 const headingPattern = /^#{1,6} /;
 
+// 部分清理后段落仍剩有效链接，但原标题不再准确，净化版中改用通用标题。
+const renamedHeadings = new Map([["## 产品与设计文档", "## 延伸阅读"]]);
+
 function git(args, options = {}) {
   return execFileSync("git", args, {
     cwd: options.cwd ?? root,
@@ -53,11 +56,12 @@ function filterText(content) {
   const out = [];
   let previousBlank = false;
   for (let i = 0; i < kept.length; i += 1) {
-    const line = kept[i];
+    let line = kept[i];
     if (headingPattern.test(line)) {
       let next = i + 1;
       while (next < kept.length && kept[next].trim() === "") next += 1;
       if (next >= kept.length || headingPattern.test(kept[next])) continue;
+      line = renamedHeadings.get(line) ?? line;
     }
     const blank = line.trim() === "";
     if (blank && previousBlank) continue;
@@ -160,4 +164,4 @@ try {
 console.log("");
 console.log("推送到 GitHub（建仓后执行）：");
 console.log("  git remote add github <仓库URL>");
-console.log("  git push github public:main");
+console.log(`  git push github ${publicBranch}:main`);

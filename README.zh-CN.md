@@ -174,7 +174,7 @@ PortViewer/
 - 数据量达到设置上限时会截断显示并在状态栏及导出元数据中标记；
 - 生产发布仍需在 Windows 10/11、普通用户/管理员权限以及 WebView2 缺失场景完成实机验收。
 
-## 产品与设计文档
+## 延伸阅读
 
 - [WebGUI 部署指南](docs/webgui-deployment.md)
 - [局域网端口 API、CLI 与 MCP](docs/lan-port-api.md)
