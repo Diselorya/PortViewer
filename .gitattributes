@@ -1,0 +1,14 @@
+# 统一检出行为：所有文本文件强制 LF，覆盖各环境 autocrlf 差异
+* text=auto eol=lf
+
+# Windows 批处理脚本必须 CRLF
+*.bat text eol=crlf
+
+# 二进制资源显式声明，防止误转换
+*.png binary
+*.ico binary
+*.exe binary
+*.zip binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
