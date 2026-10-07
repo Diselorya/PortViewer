@@ -4,5 +4,5 @@ export const FRONTEND_BUILD_IDENTITY = {
   "productId": "com.portviewer.desktop",
   "productVersion": "1.0.0",
   "frontendContractVersion": 1,
-  "sourceHash": "3557cf3e2c4c700b9e7c7261dffef60e4163afe97ddfa88bed331c5344678ba0"
+  "sourceHash": "c199c26c8964e5f1e109b81227981a7480138a2e679f31e6cf7d8ba554a06ba2"
 } as const;
