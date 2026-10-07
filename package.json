@@ -29,6 +29,7 @@
     "build:web": "npm run build && cargo build --release --manifest-path web-service/Cargo.toml",
     "test:web": "cargo test --manifest-path web-service/Cargo.toml",
     "test:lan-interfaces": "node scripts/test-lan-interfaces.mjs",
+    "test:webgui-e2e": "playwright test",
     "build:installer": "npm run build:installer:online",
     "build:installer:online": "tauri build --features custom-protocol --bundles nsis --config src-tauri/tauri.online.conf.json",
     "build:installer:offline": "tauri build --features custom-protocol --bundles msi --config src-tauri/tauri.offline.conf.json",
@@ -43,6 +44,7 @@
     "vue": "^3.5.43"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^24.13.2",
     "@vitejs/plugin-vue": "^6.0.7",

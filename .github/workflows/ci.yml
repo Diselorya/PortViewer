@@ -93,6 +93,12 @@ jobs:
       - name: Test LAN API, CLI and MCP interfaces
         run: npm run test:lan-interfaces
 
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+
+      - name: Test WebGUI in browser
+        run: npm run test:webgui-e2e
+
       - name: Run WebGUI Clippy
         run: cargo clippy --manifest-path web-service/Cargo.toml --all-targets -- -D warnings
 
@@ -138,6 +144,12 @@ jobs:
 
       - name: Test Linux LAN API, CLI and MCP interfaces
         run: npm run test:lan-interfaces
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test Linux WebGUI in browser
+        run: npm run test:webgui-e2e
 
       - name: Lint Linux WebGUI
         run: cargo clippy --manifest-path web-service/Cargo.toml --all-targets -- -D warnings
