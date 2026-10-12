@@ -9,13 +9,15 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const binary = path.join(
-  root,
-  "web-service",
-  "target",
-  "debug",
-  process.platform === "win32" ? "portviewer-web.exe" : "portviewer-web",
-);
+const binary =
+  process.env.PORTVIEWER_TEST_BINARY ??
+  path.join(
+    root,
+    "web-service",
+    "target",
+    "debug",
+    process.platform === "win32" ? "portviewer-web.exe" : "portviewer-web",
+  );
 const token = "ci-portviewer-token-0123456789abcdef";
 const children = new Set();
 

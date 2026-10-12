@@ -28,6 +28,8 @@ export type AttributionKind =
   | "IisAppPool"
   | "NssmService"
   | "WindowsService"
+  | "SystemdService"
+  | "SystemProcess"
   | "NodeApplication"
   | "PythonApplication";
 export type AttributionConfidence = "Exact" | "High" | "Medium";
@@ -67,9 +69,9 @@ export interface ScanScope {
   message: string | null;
 }
 export interface ScanWarning {
-  code: "scope_failed";
-  protocol: Protocol;
-  ip_version: IpVersion;
+  code: "scope_failed" | "attribution_limited";
+  protocol?: Protocol;
+  ip_version?: IpVersion;
   message: string;
 }
 export interface AttributionResolverReport {

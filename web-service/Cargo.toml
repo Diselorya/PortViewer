@@ -25,8 +25,11 @@ zeroize = "1.9.0"
 portviewer-app = { path = "../src-tauri", features = ["custom-protocol"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
 netstat2 = "0.11.2"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+toml = "=0.9.12"
 
 [dev-dependencies]
+toml = "=0.9.12"
 tower = { version = "0.5", features = ["util"] }

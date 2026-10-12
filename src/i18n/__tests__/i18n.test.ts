@@ -25,6 +25,12 @@ describe("i18n", () => {
 
   it("localizes native attribution labels without leaking Chinese status details into English", () => {
     expect(backendText("en-US", "容器 ID")).toBe("Container ID");
+    expect(backendText("en-US", "运行模式")).toBe("Run mode");
+    expect(backendText("en-US", "项目路径")).toBe("Project path");
+    expect(backendText("en-US", "单元文件")).toBe("Unit file");
+    expect(backendText("en-US", "自动重载（--reload）；由 systemd 管理")).toBe(
+      "Automatic reload (--reload); Managed by systemd",
+    );
     expect(backendText("en-US", "Nginx 默认站点 :80")).toBe(
       "Nginx default site :80",
     );

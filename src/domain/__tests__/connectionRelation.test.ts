@@ -81,4 +81,45 @@ describe("connection relation", () => {
     expect(relationSentence(entry(), "zh-CN")).toContain("本机 10.0.0.5:53000");
     expect(relationSentence(entry(), "en-US")).toContain("peer provides");
   });
+
+  it.each(["zh-CN", "en-US"] as const)(
+    "should identify the actual workload instead of docker-proxy in %s",
+    (locale) => {
+      const container = entry({
+        state: "Listen",
+        process_name: "docker-proxy",
+        attributions: [
+          {
+            kind: "DockerContainer",
+            name: "orders-api",
+            description: "Order processing service",
+            confidence: "High",
+            source: "Docker API port mapping",
+            facts: [],
+          },
+        ],
+      });
+
+      expect(relationSentence(container, locale)).toMatch(/^orders-api /);
+    },
+  );
+
+  it.each([
+    ["zh-CN", "归属未确认的端点"],
+    ["en-US", "The unattributed endpoint"],
+  ] as const)(
+    "should describe an unknown owner without claiming PID 0 is a process in %s",
+    (locale, owner) => {
+      const unknown = entry({
+        state: "Listen",
+        pid: 0,
+        process_name: null,
+        process_status: "Unavailable",
+      });
+
+      expect(relationSentence(unknown, locale)).toMatch(
+        new RegExp(`^${owner} `),
+      );
+    },
+  );
 });

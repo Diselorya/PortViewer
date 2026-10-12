@@ -180,15 +180,17 @@ export const useAppStore = defineStore("app", () => {
       () =>
         entries.value.find((e) => entryKey(e) === selectedKey.value) ?? null,
     ),
-    selectedProcessEntries = computed(() =>
-      selectedEntry.value
-        ? entries.value.filter(
-            (e) =>
-              e.pid === selectedEntry.value!.pid &&
-              e.process_created_at === selectedEntry.value!.process_created_at,
-          )
-        : [],
-    ),
+    selectedProcessEntries = computed(() => {
+      const selected = selectedEntry.value;
+      if (!selected) return [];
+      // An unknown owner has no process identity; PID 0 cannot join endpoints.
+      if (selected.pid === 0) return [selected];
+      return entries.value.filter(
+        (e) =>
+          e.pid === selected.pid &&
+          e.process_created_at === selected.process_created_at,
+      );
+    }),
     activeFilterCount = computed(
       () =>
         Number(Boolean(query.value.trim())) +
@@ -259,7 +261,9 @@ export const useAppStore = defineStore("app", () => {
     scanIssues.value = scanWarningsRaw.value.map((warning) =>
       ui(
         warning.message,
-        `${warning.ip_version} ${warning.protocol} scan unavailable`,
+        warning.code === "attribution_limited"
+          ? "Process attribution is limited. Check /proc permissions and the service account; port enumeration remains available."
+          : `${warning.ip_version} ${warning.protocol} scan unavailable`,
       ),
     );
     if (scanScopesRaw.value.length) {

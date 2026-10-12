@@ -29,7 +29,8 @@ The desktop app has **no accounts, no backend services and no telemetry** — it
 
 - **Full endpoint visibility** — TCP connections, TCP listeners and UDP endpoints for IPv4/IPv6, with state, PID, process name, path and creation time.
 - **Workload attribution** — map ports to Docker containers (container name, image, Compose project/service), Nginx `server_name` + config source, IIS sites and app pools, Windows services, NSSM, npm/Node.js entrypoints and Python scripts/modules, using native parent chains and SCM.
-- **Search that understands ports** — plain text plus field syntax: `port:`, `pid:`, `process:`, `service:`, `owner:`, `workload:`, `ip:`, `state:`, `protocol:`.
+- **Linux workload context** — identify Docker containers, systemd units, Node.js/Python projects and known system programs, with names, purpose/description, execution mode, project/config/mount paths and evidence sources. Missing permissions and descriptions are reported explicitly.
+- **Search that understands ports** — plain text plus field syntax: `port:`, `pid:`, `process:`, `service:`, `owner:`, `workload:`, `container:`, `project:`, `mode:`, `ip:`, `state:`, `protocol:`.
 - **Filter, sort, customize** — protocol and TCP-state filters, multi-column sorting, visible-column selection, light/dark/system themes, three density levels.
 - **Live + safe refresh** — single-shot and auto refresh (pauses while the window is hidden), keeps the last good snapshot on scan failure.
 - **Evidence-grade export** — CSV (UTF-8 BOM, RFC 4180, formula-injection protection) and JSON of the full filtered/sorted view via the native save dialog.
@@ -77,6 +78,8 @@ cargo run --release --manifest-path web-service/Cargo.toml -- --assets dist
 # open http://127.0.0.1:17890
 ```
 
+The same frontend supports a reverse-proxy subpath such as `/portviewer/` when the proxy strips the prefix and the entry URL has a trailing slash. On Linux, an unprivileged account can enumerate ports but often cannot attribute other users' listeners. Full attribution usually requires root and readable local `/proc` and Docker socket metadata; the default limited-account unit and an optional root drop-in are documented in the [deployment guide](docs/webgui-deployment.md).
+
 LAN port API (API-only, opt-in):
 
 ```powershell
@@ -105,7 +108,7 @@ Quality gates: `npm test`, `npm run typecheck`, `npm run build`, plus `cargo fmt
 
 ## Non-goals
 
-No packet capture, protocol parsing, traffic statistics, firewall management, malware verdicts, scanning of arbitrary public hosts, history/trending, alerts, tray/auto-start, accounts, cloud sync or team features. LAN capabilities only query hosts where PortViewer's service is deliberately deployed — no subnet discovery. PortViewer reports system facts; it does not replace TCPView, Wireshark, EDR or Task Manager. Linux WebGUI is first-release quality: port/process facts are solid, but advanced attribution (Docker/systemd/Nginx) trails the Windows edition.
+No packet capture, protocol parsing, traffic statistics, firewall management, malware verdicts, scanning of arbitrary public hosts, history/trending, alerts, tray/auto-start, accounts, cloud sync or team features. LAN capabilities only query hosts where PortViewer's service is deliberately deployed — no subnet discovery. PortViewer reports system facts; it does not replace TCPView, Wireshark, EDR or Task Manager. Linux attribution depends on local metadata and permissions; dedicated Nginx virtual-host parsing remains a Windows feature.
 
 ## Contributing
 

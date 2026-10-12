@@ -4,7 +4,12 @@ import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import type { DataTableSortEvent } from "primevue/datatable";
 import { useAppStore } from "../../stores/app";
-import { primaryAttribution } from "../../domain/attribution";
+import {
+  attributionContext,
+  attributionDetails,
+  kindLabel,
+  primaryAttribution,
+} from "../../domain/attribution";
 import {
   analyzeConnection,
   localEndpoint,
@@ -21,14 +26,14 @@ const defs = computed<Array<{ field: PortColumnField; header: string }>>(() => [
   { field: "local_port", header: t("directionRole") },
   { field: "remote_address", header: t("peer") },
   { field: "state", header: t("state") },
-  { field: "attribution", header: t("processOwner") },
+  { field: "attribution", header: t("workloadPurpose") },
 ]);
 const columns = computed(() =>
   defs.value.filter((d) => store.settings.visibleColumns.includes(d.field)),
 );
 const itemSize = computed(
   () =>
-    ({ compact: 48, standard: 56, comfortable: 64 })[store.settings.density],
+    ({ compact: 64, standard: 72, comfortable: 80 })[store.settings.density],
 );
 
 function owner(entry: PortEntry) {
@@ -36,7 +41,23 @@ function owner(entry: PortEntry) {
   if (attribution)
     return {
       primary: backendText(locale.value, attribution.name),
-      secondary: entry.process_name ?? `PID ${entry.pid}`,
+      description: attribution.description
+        ? backendText(locale.value, attribution.description)
+        : `${kindLabel(attribution.kind, locale.value)} · ${t("purposeUnavailable")}`,
+      secondary: [
+        attributionContext(attribution, (value) =>
+          backendText(locale.value, value),
+        ) ||
+          entry.process_path ||
+          t("locationUnavailable"),
+        entry.process_name,
+        entry.pid > 0 ? `PID ${entry.pid}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      title: attributionDetails(attribution, locale.value, (value) =>
+        backendText(locale.value, value),
+      ),
       limited: false,
     };
   const status = processStatusLabel(
@@ -44,10 +65,15 @@ function owner(entry: PortEntry) {
     entry.process_status,
     entry.process_status_message,
   );
+  const unknownPid = entry.pid === 0 && entry.process_status !== "System";
   return {
-    primary: entry.process_name ?? status,
-    secondary: entry.process_name ? t("processOnly") : status,
-    limited: entry.process_status === "AccessDenied",
+    primary: entry.process_name ?? (unknownPid ? t("unknownOwner") : status),
+    description: unknownPid ? t("attributionLimited") : t("processOnly"),
+    secondary: entry.process_path ?? status,
+    title: entry.process_status_message ?? status,
+    limited:
+      unknownPid ||
+      ["AccessDenied", "Unavailable"].includes(entry.process_status),
   };
 }
 function relationConfidence(entry: PortEntry) {
@@ -91,7 +117,7 @@ async function copyScanError() {
 </script>
 
 <template>
-  <div class="port-table-wrap">
+  <div class="port-table-wrap" :style="{ '--workload-row': `${itemSize}px` }">
     <div
       v-if="!store.hasScanned && store.isScanning"
       class="skeleton-table"
@@ -190,7 +216,9 @@ async function copyScanError() {
             v-else
             class="owner-cell"
             :class="{ limited: owner(data).limited }"
+            :title="owner(data).title"
             ><b>{{ owner(data).primary }}</b
+            ><small class="owner-purpose">{{ owner(data).description }}</small
             ><small>{{ owner(data).secondary }}</small></span
           >
         </template>
@@ -209,3 +237,16 @@ async function copyScanError() {
     </DataTable>
   </div>
 </template>
+
+<style scoped>
+:deep(.connection-table .p-datatable-tbody > tr),
+:deep(.connection-table .p-datatable-tbody > tr > td) {
+  height: var(--workload-row);
+}
+:deep(.owner-cell) {
+  max-width: 420px;
+}
+:deep(.owner-cell .owner-purpose) {
+  color: var(--text);
+}
+</style>

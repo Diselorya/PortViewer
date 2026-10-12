@@ -12,6 +12,8 @@ const binary = path.join(
 
 export default defineConfig({
   testDir: "./e2e",
+  // The scanner intentionally allows only one scan per host at a time.
+  workers: 1,
   timeout: 60_000,
   retries: process.env.CI ? 1 : 0,
   use: { baseURL: `http://127.0.0.1:${port}` },

@@ -185,4 +185,34 @@ describe("port query", () => {
     ).toEqual([high, low]);
     expect(source).toEqual([low, high]);
   });
+
+  it("finds Linux service purpose, evidence, project path and runtime mode", () => {
+    const service = entry({
+      process_name: "python3",
+      attributions: [
+        {
+          kind: "SystemdService",
+          name: "inventory.service",
+          description: "Warehouse inventory API",
+          confidence: "Exact",
+          source: "/proc/42/cgroup + systemctl show",
+          facts: [
+            { label: "项目路径", value: "/opt/inventory" },
+            { label: "运行模式", value: "uvicorn --reload" },
+          ],
+        },
+      ],
+    });
+    for (const query of [
+      "warehouse",
+      "owner:systemd",
+      "systemctl",
+      "project:/opt/inventory",
+      "mode:--reload",
+    ])
+      expect(queryEntries([service], query, [], [], [])).toEqual([service]);
+    expect(queryEntries([service], "container:missing", [], [], [])).toEqual(
+      [],
+    );
+  });
 });

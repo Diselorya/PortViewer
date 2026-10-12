@@ -6,8 +6,13 @@ pub use linux::scan;
 
 #[cfg(target_os = "linux")]
 pub fn scan_basic() -> Result<serde_json::Value, String> {
-    linux::scan()
+    linux::scan_basic()
 }
+
+// Exercise the pure Linux parsers and attribution fixtures on Windows CI too.
+#[cfg(all(test, not(target_os = "linux")))]
+#[path = "platform/linux/attribution.rs"]
+mod linux_attribution_tests;
 
 #[cfg(windows)]
 pub fn scan() -> Result<serde_json::Value, String> {

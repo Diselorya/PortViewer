@@ -29,6 +29,7 @@
     "build:web": "npm run build && cargo build --release --manifest-path web-service/Cargo.toml",
     "test:web": "cargo test --manifest-path web-service/Cargo.toml",
     "test:lan-interfaces": "node scripts/test-lan-interfaces.mjs",
+    "test:linux-deployment": "node scripts/test-linux-deployment.mjs",
     "test:webgui-e2e": "playwright test",
     "build:installer": "npm run build:installer:online",
     "build:installer:online": "tauri build --features custom-protocol --bundles nsis --config src-tauri/tauri.online.conf.json",

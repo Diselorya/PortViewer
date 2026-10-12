@@ -53,6 +53,9 @@ jobs:
       - name: Verify desktop build guard failures
         run: npm run test:build-guard
 
+      - name: Verify Linux deployment configuration
+        run: npm run test:linux-deployment
+
       - name: Install Rust dependency auditor
         run: cargo install cargo-audit --version 0.22.2 --locked
 
@@ -141,6 +144,9 @@ jobs:
 
       - name: Build Linux WebGUI debug binary for interface E2E
         run: cargo build --manifest-path web-service/Cargo.toml
+
+      - name: Test Linux systemd sandbox and process attribution
+        run: npm run test:linux-deployment -- --integration
 
       - name: Test Linux LAN API, CLI and MCP interfaces
         run: npm run test:lan-interfaces

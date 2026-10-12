@@ -9,7 +9,7 @@ type Params = Record<string, string | number>;
 const messages = {
   "zh-CN": {
     appSubtitle: "本机端口检查器",
-    searchReady: "搜索端口、PID、进程、路径或 IP…",
+    searchReady: "搜索服务、容器、项目、用途、路径或端口…",
     searchWaiting: "等待首次扫描…",
     refresh: "刷新",
     close: "关闭",
@@ -30,6 +30,15 @@ const messages = {
     directionRole: "方向 / 角色",
     peer: "对端",
     processOwner: "进程归属",
+    workloadPurpose: "容器 / 服务 / 项目与用途",
+    purposeUnavailable: "用途未提供",
+    locationUnavailable: "路径未获取",
+    unknownOwner: "归属未知",
+    attributionLimited: "进程归因受限",
+    attributionLimitedHint:
+      "端口已读取，但没有取得对应 PID 的证据，不能判断所属进程、服务或项目。请检查运行权限及 /proc 可见性。",
+    attributionPartial: "归因不完整",
+    attributionRunning: "正在识别归属",
     loading: "正在读取本机 TCP/UDP 端点…",
     notScanned: "尚未扫描本机端口",
     notScannedHint: "启动后立即扫描已关闭。需要时手动读取当前 TCP/UDP 端点。",
@@ -50,13 +59,13 @@ const messages = {
     webReadOnly:
       "WebGUI 为本机只读模式：可以扫描、筛选和导出；终止进程与提权仅在 Windows 桌面版提供。",
     staleData: "刷新失败，当前继续显示 {time} 的旧数据。",
-    scopeUnavailable: "部分扫描范围不可用：{issues}",
+    scopeUnavailable: "扫描提示：{issues}",
     attributionUnavailable:
       "服务归属部分不可用：{issues}。基础端口数据不受影响。",
     permissionLimited:
-      "{count} 个进程的详细信息不可用；以管理员身份运行可能获得更多信息。",
+      "{count} 个进程的详细信息不可用；请检查运行账户权限及进程可见性。",
     attributionPermissionLimited:
-      "部分服务归属因权限不足而无法读取；以管理员身份运行可能获得更多信息。",
+      "部分服务归属因权限不足而无法读取；请检查运行账户权限及进程可见性。",
     settings: "设置",
     scan: "扫描",
     autoRefresh: "自动刷新",
@@ -146,7 +155,7 @@ const messages = {
     serviceAttribution: "服务归属",
     processOnlyTitle: "仅识别到 OS 进程",
     processOnlyHint:
-      "当前端点没有匹配到容器、站点、Windows 服务或运行时入口。进程事实仍然有效。",
+      "当前端点没有匹配到容器、站点、systemd / Windows 服务或项目入口。可继续对照进程路径与归因报告排查。",
     source: "证据：{source}",
     currentEndpoints: "当前端点",
     copyDetails: "复制详情",
@@ -169,7 +178,7 @@ const messages = {
   },
   "en-US": {
     appSubtitle: "Local port inspector",
-    searchReady: "Search port, PID, process, path, or IP…",
+    searchReady: "Search service, container, project, purpose, path, or port…",
     searchWaiting: "Waiting for first scan…",
     refresh: "Refresh",
     close: "Close",
@@ -190,6 +199,15 @@ const messages = {
     directionRole: "Direction / role",
     peer: "Peer",
     processOwner: "Process / owner",
+    workloadPurpose: "Container / service / project and purpose",
+    purposeUnavailable: "Purpose not provided",
+    locationUnavailable: "Path unavailable",
+    unknownOwner: "Owner unknown",
+    attributionLimited: "Process attribution limited",
+    attributionLimitedHint:
+      "Ports were read, but no evidence links this endpoint to a PID. Its process, service, or project cannot be identified. Check account permissions and /proc visibility.",
+    attributionPartial: "Attribution incomplete",
+    attributionRunning: "Identifying owners",
     loading: "Reading local TCP/UDP endpoints…",
     notScanned: "Local ports have not been scanned",
     notScannedHint:
@@ -212,13 +230,13 @@ const messages = {
     webReadOnly:
       "WebGUI is local and read-only: scan, filter, and export are available; process termination and elevation require the Windows desktop app.",
     staleData: "Refresh failed; still showing data from {time}.",
-    scopeUnavailable: "Some scan scopes are unavailable: {issues}",
+    scopeUnavailable: "Scan notices: {issues}",
     attributionUnavailable:
       "Some attribution resolvers are unavailable: {issues}. Base port data is unaffected.",
     permissionLimited:
-      "Details for {count} processes are unavailable; running as administrator may reveal more information.",
+      "Details for {count} processes are unavailable; check account permissions and process visibility.",
     attributionPermissionLimited:
-      "Some service attribution data is unavailable due to permissions; running as administrator may reveal more information.",
+      "Some service attribution data is unavailable due to permissions; check account permissions and process visibility.",
     settings: "Settings",
     scan: "Scan",
     autoRefresh: "Auto refresh",
@@ -317,7 +335,7 @@ const messages = {
     serviceAttribution: "Service attribution",
     processOnlyTitle: "OS process only",
     processOnlyHint:
-      "This endpoint did not match a container, site, Windows service, or runtime entry. Process facts remain valid.",
+      "This endpoint did not match a container, site, systemd / Windows service, or project entry. Inspect its process path and attribution reports for more evidence.",
     source: "Evidence: {source}",
     currentEndpoints: "Current endpoints",
     copyDetails: "Copy details",
@@ -424,6 +442,48 @@ const BACKEND_TEXT_EN: Record<string, string> = {
   "Node.js 应用": "Node.js application",
   "Python 应用": "Python application",
   项目: "Project",
+  项目名: "Project name",
+  项目简介: "Project description",
+  简介: "Description",
+  用途: "Purpose",
+  功能: "Purpose",
+  运行模式: "Run mode",
+  运行方式: "Run mode",
+  模式: "Mode",
+  项目路径: "Project path",
+  工作目录: "Working directory",
+  配置路径: "Configuration path",
+  配置文件: "Configuration file",
+  配置范围: "Configuration coverage",
+  服务路径: "Service path",
+  单元文件: "Unit file",
+  "Socket 单元": "Socket unit",
+  "Socket 配置": "Socket configuration",
+  服务单元: "Service unit",
+  容器路径: "Container path",
+  宿主路径: "Host path",
+  宿主机路径: "Host path",
+  挂载: "Mounts",
+  挂载路径: "Mount paths",
+  Compose项目: "Compose project",
+  "Compose 项目": "Compose project",
+  "Compose 服务": "Compose service",
+  "Compose 文件": "Compose files",
+  "Compose 工作目录": "Compose working directory",
+  容器名: "Container name",
+  启动入口: "Entry point",
+  可执行文件: "Executable",
+  程序路径: "Program path",
+  简介来源: "Description source",
+  应用入口: "Application entry point",
+  框架: "Framework",
+  程序: "Program",
+  包名: "Package name",
+  包描述: "Package description",
+  父进程: "Parent process",
+  运行用户: "User",
+  用户: "User",
+  虚拟环境: "Virtual environment",
   入口: "Entry point",
   模块: "Module",
   "容器 ID": "Container ID",
@@ -445,6 +505,83 @@ const BACKEND_TEXT_EN: Record<string, string> = {
   "Python 临时运行工作负载": "Temporary Python workload",
   "NSSM 托管的 Windows 服务": "Windows service hosted by NSSM",
   "Windows 服务": "Windows service",
+  "systemd 服务": "systemd service",
+  系统程序: "System program",
+  程序身份: "Program",
+  "Node.js 项目": "Node.js project",
+  "Python 项目": "Python project",
+  "systemd socket activation；监听描述符由 PID 1 持有":
+    "systemd socket activation; listening descriptor held by PID 1",
+  "systemd 用户级服务（未连接用户管理器）":
+    "systemd user service (user manager not connected)",
+  "只读单元文件或 cgroup；动态属性、实例替换和 drop-in 尚未确认":
+    "Unit file or cgroup only; dynamic properties, instance substitution, and drop-ins are unverified",
+  "单元未提供 Description": "The unit does not provide Description",
+  "systemctl Listen/Triggers + 端点匹配":
+    "systemctl Listen/Triggers and endpoint matching",
+  "/proc cgroup + 本地单元文件（未连接管理器）":
+    "/proc cgroup and local unit files (manager not connected)",
+  "未配置容器简介；请结合镜像和 Compose 服务识别用途":
+    "No container description; inspect its image and Compose service for purpose",
+  "项目没有可读取的静态简介；未根据端口猜测业务用途":
+    "No readable static project description; business purpose is unknown",
+  "未发现程序简介；当前仅确认进程身份与路径":
+    "No program description; only process identity and path are confirmed",
+  "已知程序职责；不代表该实例的业务配置":
+    "Known program responsibilities; instance configuration is unverified",
+  "/proc exe/cwd + 程序职责目录":
+    "/proc exe/cwd and program responsibility catalog",
+  "/proc cmdline/cwd/exe + 本地静态项目元数据（不执行项目）":
+    "/proc cmdline/cwd/exe and local static project metadata (without executing the project)",
+  "自动重载（--reload）": "Automatic reload (--reload)",
+  "文件监听（--watch）": "File watching (--watch)",
+  "调试（--inspect）": "Debugging (--inspect)",
+  "Python 模块运行（-m）": "Python module (-m)",
+  脚本直接运行: "Direct script execution",
+  "运行模式未确认（没有可读入口证据）":
+    "Run mode unverified (no readable entry evidence)",
+  "由 systemd 管理": "Managed by systemd",
+  容器内运行: "Running inside a container",
+  "Vite 构建预览（preview）": "Vite build preview (preview)",
+  "Vite 构建（build）": "Vite build (build)",
+  "Vite 开发服务器（serve）": "Vite development server (serve)",
+  "Next.js 开发服务器（dev）": "Next.js development server (dev)",
+  "Next.js 生产服务器（start）": "Next.js production server (start)",
+  "Next.js 构建（build）": "Next.js build (build)",
+  "Next.js CLI（模式未确认）": "Next.js CLI (mode unverified)",
+  "webpack 开发模式（--mode development）":
+    "webpack development (--mode development)",
+  "webpack 生产模式（--mode production）":
+    "webpack production (--mode production)",
+  "webpack 开发服务器（serve）": "webpack development server (serve)",
+  "webpack CLI（模式未确认）": "webpack CLI (mode unverified)",
+  "Uvicorn ASGI 服务": "Uvicorn ASGI server",
+  "Gunicorn Python 应用服务": "Gunicorn Python application server",
+  "Hypercorn ASGI/WSGI 服务": "Hypercorn ASGI/WSGI server",
+  "Linux 系统与服务管理器；PID 1 的监听端口需进一步查看 socket 单元":
+    "Linux system and service manager; inspect socket units for PID 1 listeners",
+  "systemd 本机 DNS 解析与缓存服务": "systemd local DNS resolver and cache",
+  "systemd 网络接口配置服务": "systemd network interface configuration service",
+  "OpenSSH 远程登录服务": "OpenSSH remote login service",
+  "Nginx HTTP 服务和反向代理；具体站点用途需查看站点配置":
+    "Nginx HTTP server and reverse proxy; inspect site configuration for purpose",
+  "Apache HTTP 服务；具体站点用途需查看站点配置":
+    "Apache HTTP server; inspect site configuration for purpose",
+  "PostgreSQL 数据库服务": "PostgreSQL database server",
+  "MySQL/MariaDB 数据库服务": "MySQL/MariaDB database server",
+  "Redis 数据存储与缓存服务": "Redis data store and cache",
+  "Docker 容器引擎守护进程": "Docker container engine daemon",
+  容器生命周期与镜像管理服务:
+    "Container lifecycle and image management service",
+  "Docker 已发布端口代理；实际容器见 Docker 归属":
+    "Docker published port proxy; see Docker attribution for the actual container",
+  "CUPS 打印服务": "CUPS print server",
+  "Avahi mDNS/DNS-SD 局域网设备与服务发现":
+    "Avahi mDNS/DNS-SD local device and service discovery",
+  "DNS 缓存、DHCP 与网络启动服务；启用功能取决于配置":
+    "DNS cache, DHCP, and network boot; enabled features depend on configuration",
+  "Chrony 系统时钟同步服务": "Chrony system clock synchronization service",
+  "ONC RPC 程序与端口映射服务": "ONC RPC program and port mapping service",
   "Windows 服务 / NSSM": "Windows Services / NSSM",
   "Nginx 虚拟主机": "Nginx virtual host",
   "Win32_Process 命令行 + 父进程链（脱敏摘要）":
@@ -462,6 +599,9 @@ export function backendText(locale: AppLocale, value: string): string {
   const exact = BACKEND_TEXT_EN[value];
   if (exact) return exact;
   return value
+    .split("；")
+    .map((part) => BACKEND_TEXT_EN[part] ?? part)
+    .join("; ")
     .replace(/^Docker 容器 · /, "Docker container · ")
     .replace(/^Nginx 默认站点 /, "Nginx default site ")
     .replace(

@@ -17,7 +17,7 @@ async function api<T>(path: string): Promise<T> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetch(path, {
+    const response = await fetch(new URL(path, document.baseURI).href, {
       method: "GET",
       cache: "no-store",
       credentials: "same-origin",
@@ -66,9 +66,9 @@ export async function invokeWeb<T>(
 ): Promise<T> {
   switch (command) {
     case "get_build_identity":
-      return api<T>("/api/v1/build-identity");
+      return api<T>("api/v1/build-identity");
     case "scan_all_ports":
-      return api<T>("/api/v1/scan");
+      return api<T>("api/v1/scan");
     case "get_privilege_status":
       return {
         is_elevated: false,

@@ -137,4 +137,83 @@ describe("ProcessInspector", () => {
     expect(wrapper.text()).toContain("精确");
     expect(wrapper.text()).toContain("0.0.0.0:18000 → 8000/tcp");
   });
+
+  it("puts service purpose and project location first and copies evidence without truncation", async () => {
+    const selected = entry({
+      process_name: "python3",
+      attributions: [
+        {
+          kind: "SystemdService",
+          name: "inventory.service",
+          description: "Warehouse inventory API",
+          confidence: "Exact",
+          source: "/proc/42/cgroup + systemctl show",
+          facts: [
+            { label: "服务名", value: "inventory.service" },
+            { label: "运行模式", value: "uvicorn --reload" },
+            { label: "项目路径", value: "/opt/仓库/inventory" },
+          ],
+        },
+      ],
+    });
+    const store = useAppStore();
+    store.entries = [selected];
+    store.selectEntry(selected);
+    const wrapper = mount(ProcessInspector);
+    expect(wrapper.get("h2").text()).toBe("inventory.service");
+    expect(wrapper.findAll("section")[0]?.classes()).toContain(
+      "workload-section",
+    );
+    expect(wrapper.text()).toContain("Warehouse inventory API");
+    expect(wrapper.text()).toContain("uvicorn --reload");
+    await wrapper
+      .findAll(".workload-card .copy-value")
+      .find((button) => button.text() === "/opt/仓库/inventory")!
+      .trigger("click");
+    expect(navigator.clipboard.writeText).toHaveBeenLastCalledWith(
+      "/opt/仓库/inventory",
+    );
+    await wrapper.get("footer button").trigger("click");
+    const copied = vi.mocked(navigator.clipboard.writeText).mock.lastCall?.[0];
+    expect(copied).toContain("Warehouse inventory API");
+    expect(copied).toContain("运行模式: uvicorn --reload");
+    expect(copied).toContain("项目路径: /opt/仓库/inventory");
+    expect(copied).toContain("/proc/42/cgroup + systemctl show");
+  });
+
+  it("keeps endpoints whose PID is unknown separate and explains the attribution limit", () => {
+    const selected = entry({
+      pid: 0,
+      process_name: null,
+      process_path: null,
+      process_created_at: null,
+      process_status: "AccessDenied",
+    });
+    const store = useAppStore();
+    store.entries = [selected, { ...selected, local_port: 4000 }];
+    store.selectEntry(selected);
+    const wrapper = mount(ProcessInspector);
+    expect(wrapper.get("h2").text()).toBe("归属未知");
+    expect(wrapper.text()).toContain("没有取得对应 PID 的证据");
+    expect(wrapper.text()).not.toContain("系统进程");
+    expect(wrapper.findAll(".endpoints > button")).toHaveLength(1);
+    expect(
+      wrapper.get("button.danger-text").attributes("disabled"),
+    ).toBeDefined();
+  });
+
+  it("does not recategorize Windows System entries as missing PID evidence", () => {
+    const selected = entry({
+      pid: 0,
+      process_name: "System",
+      process_status: "System",
+    });
+    const store = useAppStore();
+    store.entries = [selected];
+    store.selectEntry(selected);
+    const wrapper = mount(ProcessInspector);
+    expect(wrapper.get("h2").text()).toBe("System");
+    expect(wrapper.text()).toContain("系统进程");
+    expect(wrapper.text()).not.toContain("没有取得对应 PID 的证据");
+  });
 });

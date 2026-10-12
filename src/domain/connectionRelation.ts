@@ -217,7 +217,9 @@ export function relationSentence(entry: PortEntry, locale: AppLocale): string {
   const relation = analyzeConnection(entry);
   return translate(locale, relation.sentenceKey, {
     process:
-      entry.process_name ?? (locale === "zh-CN" ? "该进程" : "The process"),
+      entry.attributions?.[0]?.name ??
+      entry.process_name ??
+      (locale === "zh-CN" ? "归属未确认的端点" : "The unattributed endpoint"),
     local: localEndpoint(entry),
     remote: remoteEndpoint(entry),
     service: relation.service,

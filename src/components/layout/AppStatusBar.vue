@@ -3,7 +3,16 @@ import { computed } from "vue";
 import { useAppStore } from "../../stores/app";
 import { backendText, useI18n } from "../../i18n";
 const store = useAppStore();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
+const attributionIncomplete = computed(
+  () =>
+    store.attributionReports.some((item) =>
+      ["Partial", "Failed"].includes(item.status),
+    ) ||
+    store.entries.some(
+      (entry) => entry.pid === 0 && entry.process_status !== "System",
+    ),
+);
 const time = computed(() =>
   store.scannedAt
     ? new Date(store.scannedAt).toLocaleTimeString(locale.value, {
@@ -22,9 +31,11 @@ const state = computed(() =>
       ? locale.value === "zh-CN"
         ? "扫描异常"
         : "Scan error"
-      : locale.value === "zh-CN"
-        ? "就绪"
-        : "Ready",
+      : attributionIncomplete.value
+        ? t("attributionPartial")
+        : locale.value === "zh-CN"
+          ? "就绪"
+          : "Ready",
 );
 </script>
 <template>
@@ -68,16 +79,21 @@ const state = computed(() =>
           store.attributionReports
             .map(
               (item) =>
-                `${backendText(locale, item.resolver)}: ${item.status}${locale === 'zh-CN' && item.message ? ` · ${item.message}` : ''}`,
+                `${backendText(locale, item.resolver)}: ${item.status}${item.message ? ` · ${backendText(locale, item.message)}` : ''}`,
             )
             .join('\n')
         "
+        :class="{ 'warning-text': attributionIncomplete }"
         >{{ locale === "zh-CN" ? "归属" : "Attributed" }}：{{
           store.attributionMatchedCount
         }}/{{ store.entries.length }}</span
       ><span
         class="health"
-        :class="{ busy: store.isScanning, error: store.scanError }"
+        :class="{
+          busy: store.isScanning,
+          error: store.scanError,
+          'warning-text': attributionIncomplete,
+        }"
         ><i />{{ state }}</span
       >
     </div>

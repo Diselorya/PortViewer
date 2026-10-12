@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useAppStore } from "../stores/app";
-import { confidenceLabel, kindLabel } from "../domain/attribution";
+import {
+  attributionDetails,
+  confidenceLabel,
+  kindLabel,
+  primaryAttribution,
+} from "../domain/attribution";
 import {
   analyzeConnection,
   localEndpoint,
@@ -14,6 +19,13 @@ import type { PortEntry } from "../types/port";
 const store = useAppStore();
 const { locale, state, t } = useI18n();
 const entry = computed(() => store.selectedEntry!);
+const workload = computed(() => primaryAttribution(entry.value));
+const unknownPid = computed(
+  () => entry.value.pid === 0 && entry.value.process_status !== "System",
+);
+const processEndpoints = computed(() =>
+  unknownPid.value ? [entry.value] : store.selectedProcessEntries,
+);
 const relation = computed(() => analyzeConnection(entry.value));
 const sentence = computed(() => relationSentence(entry.value, locale.value));
 const confidenceText = computed(() =>
@@ -53,10 +65,15 @@ function details() {
     `${t("localEndpoint")}: ${localEndpoint(e)}`,
     `${t("peer")}: ${remoteEndpoint(e)}`,
     `${t("state")}: ${e.protocol === "Tcp" ? state(e.state) : "UDP"}`,
-    `PID: ${e.pid}`,
+    `PID: ${unknownPid.value ? t("unavailable") : e.pid}`,
     `${t("processOwner")}: ${e.process_name ?? processStatusLabel(locale.value, e.process_status, e.process_status_message)}`,
     `${t("executable")}: ${e.process_path ?? t("unavailable")}`,
     `${t("evidence")}: ${t(relation.value.evidenceKey)}`,
+    ...(e.attributions ?? []).map((item) =>
+      attributionDetails(item, locale.value, (value) =>
+        backendText(locale.value, value),
+      ),
+    ),
   ].join("\n");
 }
 </script>
@@ -65,8 +82,17 @@ function details() {
   <aside class="inspector relation-inspector" :aria-label="t('inspectorAria')">
     <header>
       <div>
-        <small>{{ t("connectionRelation") }}</small>
-        <h2>{{ t(relation.titleKey) }}</h2>
+        <small>{{ t("workloadPurpose") }}</small>
+        <h2>
+          {{
+            workload
+              ? backendText(locale, workload.name)
+              : (entry.process_name ??
+                (unknownPid
+                  ? t("unknownOwner")
+                  : processStatusLabel(locale, entry.process_status)))
+          }}
+        </h2>
       </div>
       <button
         class="icon-btn"
@@ -76,13 +102,75 @@ function details() {
         ×
       </button>
     </header>
+    <section class="workload-section">
+      <h3>
+        {{ t("serviceAttribution") }}
+        <span>{{ entry.attributions?.length ?? 0 }}</span>
+      </h3>
+      <div v-if="entry.attributions?.length" class="workload-list">
+        <article
+          v-for="(item, index) in entry.attributions"
+          :key="`${item.kind}-${item.name}-${item.source}`"
+          class="workload-card"
+          :class="{ primary: index === 0 }"
+        >
+          <header>
+            <div>
+              <small>{{ kindLabel(item.kind, locale) }}</small
+              ><b>{{ backendText(locale, item.name) }}</b>
+            </div>
+            <span class="confidence" :class="item.confidence.toLowerCase()">{{
+              confidenceLabel(item.confidence, locale)
+            }}</span>
+          </header>
+          <p v-if="item.description">
+            {{ backendText(locale, item.description) }}
+          </p>
+          <p v-else>{{ t("purposeUnavailable") }}</p>
+          <dl v-if="item.facts.length">
+            <template v-for="fact in item.facts" :key="fact.label + fact.value"
+              ><dt>{{ backendText(locale, fact.label) }}</dt>
+              <dd class="mono">
+                <button
+                  class="copy-value path"
+                  @click="copy(backendText(locale, fact.label), fact.value)"
+                >
+                  {{ backendText(locale, fact.value) }}
+                </button>
+              </dd></template
+            >
+          </dl>
+          <small class="evidence">{{
+            t("source", { source: backendText(locale, item.source) })
+          }}</small>
+        </article>
+      </div>
+      <div v-else class="workload-empty">
+        <b>{{ unknownPid ? t("unknownOwner") : t("processOnlyTitle") }}</b>
+        <p>
+          {{
+            unknownPid
+              ? t("attributionLimitedHint")
+              : entry.process_status === "AccessDenied"
+                ? t("permissionLimited", { count: 1 })
+                : t("processOnlyHint")
+          }}
+        </p>
+      </div>
+    </section>
+
     <section class="relation-summary">
       <p class="relation-sentence">{{ sentence }}</p>
       <div class="endpoint-flow">
         <article>
           <small>{{ t("localEndpoint") }}</small
           ><b class="mono">{{ localEndpoint(entry) }}</b
-          ><span>{{ entry.process_name ?? `PID ${entry.pid}` }}</span>
+          ><span>{{
+            workload
+              ? backendText(locale, workload.name)
+              : (entry.process_name ??
+                (entry.pid > 0 ? `PID ${entry.pid}` : t("unknownOwner")))
+          }}</span>
         </article>
         <div class="flow-arrow" :class="`role-${relation.role}`">
           <b>{{ relation.arrow }}</b
@@ -147,9 +235,10 @@ function details() {
         <dd>
           <button
             class="copy-value mono"
+            :disabled="unknownPid"
             @click="copy('PID', String(entry.pid))"
           >
-            {{ entry.pid }}
+            {{ unknownPid ? t("unavailable") : entry.pid }}
           </button>
         </dd>
         <dt>{{ t("processState") }}</dt>
@@ -184,62 +273,13 @@ function details() {
       </dl>
     </section>
 
-    <section class="workload-section">
-      <h3>
-        {{ t("serviceAttribution") }}
-        <span>{{ entry.attributions?.length ?? 0 }}</span>
-      </h3>
-      <div v-if="entry.attributions?.length" class="workload-list">
-        <article
-          v-for="(item, index) in entry.attributions"
-          :key="`${item.kind}-${item.name}-${item.source}`"
-          class="workload-card"
-          :class="{ primary: index === 0 }"
-        >
-          <header>
-            <div>
-              <small>{{ kindLabel(item.kind, locale) }}</small
-              ><b>{{ backendText(locale, item.name) }}</b>
-            </div>
-            <span class="confidence" :class="item.confidence.toLowerCase()">{{
-              confidenceLabel(item.confidence, locale)
-            }}</span>
-          </header>
-          <p v-if="item.description">
-            {{ backendText(locale, item.description) }}
-          </p>
-          <dl v-if="item.facts.length">
-            <template v-for="fact in item.facts" :key="fact.label + fact.value"
-              ><dt>{{ backendText(locale, fact.label) }}</dt>
-              <dd class="mono">
-                {{ backendText(locale, fact.value) }}
-              </dd></template
-            >
-          </dl>
-          <small class="evidence">{{
-            t("source", { source: backendText(locale, item.source) })
-          }}</small>
-        </article>
-      </div>
-      <div v-else class="workload-empty">
-        <b>{{ t("processOnlyTitle") }}</b>
-        <p>
-          {{
-            entry.process_status === "AccessDenied"
-              ? t("permissionLimited", { count: 1 })
-              : t("processOnlyHint")
-          }}
-        </p>
-      </div>
-    </section>
-
     <section class="endpoints">
       <h3>
         {{ t("currentEndpoints") }}
-        <span>{{ store.selectedProcessEntries.length }}</span>
+        <span>{{ processEndpoints.length }}</span>
       </h3>
       <button
-        v-for="e in store.selectedProcessEntries"
+        v-for="e in processEndpoints"
         :key="`${e.protocol}-${endpoint(e)}`"
         :class="{ active: e === entry }"
         @click="store.selectEntry(e)"
@@ -265,3 +305,10 @@ function details() {
     </footer>
   </aside>
 </template>
+
+<style scoped>
+.workload-card dd .copy-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+</style>

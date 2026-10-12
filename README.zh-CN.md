@@ -15,7 +15,8 @@ PortViewer 直接读取 Windows/Linux 网络端点，把 IPv4/IPv6 的 TCP、UDP
 - 将 Docker published port 精确到容器名、镜像及 Compose project/service；
 - 将 Nginx 监听映射到 `server_name` 与配置来源，将 IIS HTTP.sys/worker process 映射到站点和应用池；
 - 通过原生 Windows 进程父链和 Service Control Manager 识别 Windows Service、NSSM、npm/Node.js 入口与 Python 脚本/模块；
-- 搜索端口、PID、进程、工作负载、路径和 IP，并支持 `port:`、`pid:`、`process:`、`service:`、`owner:`、`workload:`、`ip:`、`state:`、`protocol:` 字段语法；
+- Linux WebGUI 识别 Docker 容器、systemd 服务、Node.js/Python 项目和系统程序用途；展示真实名称、简介、运行模式及项目/服务配置/容器挂载路径，并标注证据来源；
+- 搜索端口、PID、进程、工作负载、路径和 IP，并支持 `port:`、`pid:`、`process:`、`service:`、`owner:`、`workload:`、`container:`、`project:`、`mode:`、`ip:`、`state:`、`protocol:` 字段语法；
 - 按协议和 TCP 状态过滤、多列排序、选择可见列；
 - 单次和自动刷新，窗口隐藏时暂停，扫描失败时保留上一份成功数据；
 - 查看进程详情与全部关联端点，复制字段或完整诊断信息；
@@ -62,7 +63,7 @@ cargo run --release --manifest-path web-service/Cargo.toml -- --assets dist
 xdg-open http://127.0.0.1:17890
 ```
 
-WebGUI 可以扫描、筛选、查看详情和导出，不提供终止进程或远程提权。默认只监听 loopback；远程 WebGUI 使用 SSH 隧道。配置强 Token 后可以显式监听局域网地址，但非 loopback 只开放 health 与端口 API。完整的 systemd、NSSM、Nginx 和 IIS 配置见 [WebGUI 部署指南](docs/webgui-deployment.md)。
+WebGUI 可以扫描、筛选、查看详情和导出，不提供终止进程或远程提权。默认只监听 loopback；远程 WebGUI 使用 SSH 隧道。配置强 Token 后可以显式监听局域网地址，但非 loopback 只开放 health 与端口 API。前端支持由代理剥离前缀的 `/portviewer/` 子路径。Linux 普通账号通常无法识别其他用户的监听进程；完整归因通常需要 root，并要求可读的 `/proc` 与本机 Docker socket。默认单元和显式完整归因 drop-in、systemd/NSSM/Nginx/IIS 配置见 [WebGUI 部署指南](docs/webgui-deployment.md)。
 
 局域网端口 API（API-only 示例）：
 
@@ -162,7 +163,7 @@ PortViewer/
 ## 已知限制
 
 - Windows 桌面版支持 Windows 10/11 x64；只读 WebGUI 支持 Windows 与 Linux；
-- Linux WebGUI 当前提供端口与进程归属，Docker/systemd/Nginx 的高级归属仍低于 Windows 桌面/WebGUI；
+- Linux 高级归属依赖可读的本机元数据；普通账号会明确报告归因受限，完整归因可使用显式 root drop-in；Nginx 虚拟站点的专门解析仍由 Windows 版提供；
 - 进程名称、路径和创建时间受 Windows 权限及进程生命周期影响；不可读取时界面会明确标注；
 - 服务归属是带来源和置信度的增强证据，不替代 OS 端口/PID 事实；同端口的 Nginx/IIS 虚拟主机会保留为多个候选；
 - Docker 只解析当前本机 Engine 的 published port，主动跳过远端 context；容器内部未发布端口不属于 Windows 本机端口范围；

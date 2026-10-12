@@ -99,7 +99,7 @@ describe("exports", () => {
         {
           kind: "NginxSite",
           name: "api.example.test",
-          description: "Nginx 虚拟主机",
+          description: "Nginx 虚拟主机, 业务 API\nHTTPS gateway",
           confidence: "High",
           source: "nginx.conf",
           facts: [{ label: "监听", value: "*:443" }],
@@ -117,6 +117,12 @@ describe("exports", () => {
     const csv = createCsv([attributed], ["attribution"]);
     expect(csv).toContain("Nginx 站点: api.example.test");
     expect(csv).toContain("NSSM 服务: Gateway Service");
+    expect(csv).toContain("Nginx 虚拟主机, 业务 API\nHTTPS gateway");
+    expect(csv).toContain("监听: *:443");
+    expect(csv).toContain("服务名: gateway");
+    expect(csv).toContain("证据: nginx.conf");
+    expect(csv).toContain("可信度: 高可信");
+    expect(csv.split("\r\n")[1]?.startsWith('"')).toBe(true);
 
     const json = JSON.parse(
       createJson([attributed], {

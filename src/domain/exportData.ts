@@ -1,5 +1,5 @@
 import type { PortEntry } from "../types/port";
-import { attributionLabel, kindLabel } from "./attribution";
+import { attributionDetails, attributionLabel } from "./attribution";
 export type ExportColumn =
   Exclude<keyof PortEntry, "attributions"> | "attribution";
 export const EXPORT_COLUMNS: ExportColumn[] = [
@@ -52,8 +52,8 @@ export function createCsv(
           return escapeCsv(
             e.attributions?.length
               ? e.attributions
-                  .map((item) => `${kindLabel(item.kind)}: ${item.name}`)
-                  .join(" | ")
+                  .map((item) => attributionDetails(item))
+                  .join("\n\n")
               : attributionLabel(e),
           );
         return escapeCsv(e[c]);

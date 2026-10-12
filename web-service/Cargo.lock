@@ -2843,6 +2843,7 @@ name = "portviewer-web"
 version = "1.0.0"
 dependencies = [
  "axum",
+ "libc",
  "netstat2",
  "portviewer-app",
  "rand",
@@ -2854,6 +2855,7 @@ dependencies = [
  "subtle",
  "sysinfo",
  "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "tower",
  "tower-http 0.7.0",
  "tracing",

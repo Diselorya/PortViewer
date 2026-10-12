@@ -315,6 +315,80 @@ describe("app store", () => {
     expect(store.selectedEntry).toBeNull();
   });
 
+  it("should show only the selected endpoint when its PID is unknown", () => {
+    const selected = entry({
+      pid: 0,
+      process_name: null,
+      process_created_at: null,
+      process_status: "AccessDenied",
+    });
+    const unrelated = entry({
+      pid: 0,
+      local_port: 5432,
+      process_name: null,
+      process_created_at: null,
+      process_status: "AccessDenied",
+    });
+    const store = useAppStore();
+    store.entries = [selected, unrelated];
+    store.selectEntry(selected);
+
+    expect(store.selectedProcessEntries).toEqual([selected]);
+  });
+
+  it("should still group endpoints of the same known process identity", () => {
+    const selected = entry();
+    const sameProcess = entry({ local_port: 3001 });
+    const reusedPid = entry({
+      local_port: 3002,
+      process_created_at: "2026-08-23T01:00:00Z",
+    });
+    const store = useAppStore();
+    store.entries = [selected, sameProcess, reusedPid];
+    store.selectEntry(selected);
+
+    expect(store.selectedProcessEntries).toEqual([selected, sameProcess]);
+  });
+
+  it("should translate attribution limits without claiming a scope failure", async () => {
+    invokeMock.mockResolvedValue(
+      scan([entry()], {
+        warnings: [
+          {
+            code: "attribution_limited",
+            message: "进程归因受限；端口扫描完整，可检查 /proc 权限与服务账户",
+          },
+        ],
+      }),
+    );
+    const store = useAppStore();
+    await store.refresh();
+    store.updateSettings({ language: "en-US" });
+    await nextTick();
+
+    expect(store.scanIssues).toEqual([
+      "Process attribution is limited. Check /proc permissions and the service account; port enumeration remains available.",
+    ]);
+  });
+
+  it("should not mark attribution-limited results as truncated", async () => {
+    invokeMock.mockResolvedValue(
+      scan([entry()], {
+        warnings: [
+          {
+            code: "attribution_limited",
+            message: "Linux 普通用户无法读取其他用户的进程信息",
+          },
+        ],
+      }),
+    );
+    const store = useAppStore();
+
+    await store.refresh();
+
+    expect(store.isTruncated).toBe(false);
+  });
+
   it.each([
     entry({ pid: 0 }),
     entry({ pid: 4 }),
