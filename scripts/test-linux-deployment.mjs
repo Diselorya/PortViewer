@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import {
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rmdir,
   unlink,
@@ -190,15 +193,77 @@ async function waitForHealth(base, unit) {
   throw new Error(`${unit} did not start: ${lastError}\n${journal.stdout}`);
 }
 
-async function startUnit(mode, overrides = new Map()) {
+async function serviceFixture() {
   const binary =
     process.env.PORTVIEWER_TEST_BINARY ??
     path.join(root, "web-service/target/debug/portviewer-web");
+  // GitHub runner checkout ancestors can be private to the runner account.
+  // /run remains visible with PrivateTmp, without changing checkout permissions.
+  const directory = `/run/portviewer-regression-${process.pid}-${randomUUID()}`;
+  const stagedBinary = path.join(directory, "portviewer-web");
+  const assets = path.join(directory, "web-assets");
+  await privileged("install", [
+    "--directory",
+    "--mode=0755",
+    `--owner=${process.getuid()}`,
+    `--group=${process.getgid()}`,
+    directory,
+  ]);
+
+  async function copyReadableTree(source, destination) {
+    await mkdir(destination, { mode: 0o755 });
+    await chmod(destination, 0o755);
+    for (const entry of await readdir(source, { withFileTypes: true })) {
+      const from = path.join(source, entry.name);
+      const to = path.join(destination, entry.name);
+      if (entry.isDirectory()) await copyReadableTree(from, to);
+      else {
+        assert(
+          entry.isFile(),
+          `frontend asset must be a regular file: ${from}`,
+        );
+        await copyFile(from, to);
+        await chmod(to, 0o644);
+      }
+    }
+  }
+
+  async function removeContents(target) {
+    assert(
+      target === directory || target.startsWith(`${directory}/`),
+      "cleanup must remain in the owned service fixture",
+    );
+    for (const entry of await readdir(target, { withFileTypes: true })) {
+      const filename = path.join(target, entry.name);
+      if (entry.isDirectory()) {
+        await removeContents(filename);
+        await rmdir(filename);
+      } else await unlink(filename);
+    }
+  }
+
+  async function close() {
+    await removeContents(directory);
+    await privileged("rmdir", ["--", directory]);
+  }
+
+  try {
+    await copyFile(binary, stagedBinary);
+    await chmod(stagedBinary, 0o755);
+    await copyReadableTree(path.join(root, "dist"), assets);
+    return { directory, binary: stagedBinary, assets, close };
+  } catch (error) {
+    await close();
+    throw error;
+  }
+}
+
+async function startUnit(deployment, mode, overrides = new Map()) {
   const port = await freePort();
   const unit = `portviewer-regression-${process.pid}-${mode}.service`;
   const description = `PortViewer deployment regression ${mode}`;
   const settings = new Map([...baseUnit, ...overrides]);
-  settings.set("WorkingDirectory", root);
+  settings.set("WorkingDirectory", deployment.directory);
   const properties = [...settings]
     .filter(
       ([key]) => !["Type", "ExecStart", "Restart", "RestartSec"].includes(key),
@@ -213,12 +278,12 @@ async function startUnit(mode, overrides = new Map()) {
     `--description=${description}`,
     ...properties,
     "--",
-    binary,
+    deployment.binary,
     "serve",
     "--listen",
     `127.0.0.1:${port}`,
     "--assets",
-    path.join(root, "dist"),
+    deployment.assets,
   ]);
   const base = `http://127.0.0.1:${port}`;
   await waitForHealth(base, unit);
@@ -552,14 +617,16 @@ async function integrationChecks() {
     ["User", "nobody"],
     ["Group", stdout.trim()],
   ]);
-  const fixture = await listenerFixture();
+  const deployment = await serviceFixture();
+  let fixture;
   const runtimeFixtures = [];
   try {
+    fixture = await listenerFixture();
     const npmFixture = await runtimeFixture("npm");
     runtimeFixtures.push(npmFixture);
     const pythonFixture = await runtimeFixture("python");
     runtimeFixtures.push(pythonFixture);
-    const limited = await startUnit("limited", limitedUser);
+    const limited = await startUnit(deployment, "limited", limitedUser);
     const limitedScan = await fetchJson(`${limited.base}/api/v1/scan`);
     assert.equal(
       limitedScan.response.status,
@@ -595,7 +662,7 @@ async function integrationChecks() {
       ),
     );
 
-    const full = await startUnit("root", fullDropIn);
+    const full = await startUnit(deployment, "root", fullDropIn);
     const fullScan = await fetchJson(`${full.base}/api/v1/scan`);
     assert.equal(fullScan.response.status, 200);
     const attributed = listenerEntries(fullScan.body, fixture.port).find(
@@ -661,6 +728,7 @@ async function integrationChecks() {
 
     // Removing only AF_NETLINK reproduces the reported healthy-but-unscannable service.
     const withoutNetlink = await startUnit(
+      deployment,
       "no-netlink",
       new Map([
         ...limitedUser,
@@ -688,11 +756,14 @@ async function integrationChecks() {
     const stopped = await Promise.allSettled(
       [...units].map((unit) => stopOwnedUnit(unit)),
     );
-    await fixture.close();
-    for (const result of [...fixtureCleanup, ...stopped]) {
+    const filesRemoved = await Promise.allSettled([
+      fixture?.close(),
+      deployment.close(),
+    ]);
+    for (const result of [...fixtureCleanup, ...stopped, ...filesRemoved]) {
       if (result.status === "rejected") console.error(result.reason.message);
     }
-    const failedCleanup = [...fixtureCleanup, ...stopped].find(
+    const failedCleanup = [...fixtureCleanup, ...stopped, ...filesRemoved].find(
       (result) => result.status === "rejected",
     );
     if (failedCleanup) throw failedCleanup.reason;
