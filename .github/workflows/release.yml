@@ -29,29 +29,36 @@ jobs:
       - run: npm run test:lan-interfaces
       - run: cargo build --release --manifest-path web-service/Cargo.toml
       - run: npm run build:installer:online
+      - run: npm run build:installer:offline
       - name: Package artifacts
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force release/web-assets | Out-Null
+          New-Item -ItemType Directory -Force release/web-assets,release/docs/api | Out-Null
           Copy-Item web-service/target/release/portviewer-web.exe release/
           Copy-Item dist/* release/web-assets/ -Recurse
-          Copy-Item README.md,LICENSE,SECURITY.md release/
-          Compress-Archive -Path release/portviewer-web.exe,release/web-assets,release/README.md,release/LICENSE,release/SECURITY.md -DestinationPath PortViewer-WebGUI-windows-x64.zip
+          Copy-Item README.md,README.zh-CN.md,LICENSE,SECURITY.md release/
+          Copy-Item docs/webgui-deployment.md,docs/lan-port-api.md,docs/installation.md release/docs/
+          Copy-Item docs/api/portviewer-lan.openapi.yaml release/docs/api/
+          Compress-Archive -Path release/* -DestinationPath PortViewer-WebGUI-windows-x64.zip
           $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $installer) { throw "NSIS installer was not produced" }
           Copy-Item $installer.FullName ./PortViewer-windows-x64-setup.exe
-          Get-FileHash PortViewer-WebGUI-windows-x64.zip,PortViewer-windows-x64-setup.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content SHA256SUMS-windows.txt
+          $offline = Get-ChildItem src-tauri/target/release/bundle/msi/*.msi | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $offline) { throw "Offline MSI installer was not produced" }
+          Copy-Item $offline.FullName ./PortViewer-windows-x64-offline.msi
+          Get-FileHash PortViewer-WebGUI-windows-x64.zip,PortViewer-windows-x64-setup.exe,PortViewer-windows-x64-offline.msi -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } | Set-Content -Encoding utf8NoBOM SHA256SUMS-windows.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows
           path: |
             PortViewer-WebGUI-windows-x64.zip
             PortViewer-windows-x64-setup.exe
+            PortViewer-windows-x64-offline.msi
             SHA256SUMS-windows.txt
 
   linux:
     name: Linux WebGUI artifact
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -68,10 +75,15 @@ jobs:
       - run: cargo build --release --manifest-path web-service/Cargo.toml
       - name: Package artifact
         run: |
-          mkdir -p package/web-assets
+          mkdir -p package/web-assets package/docs/api package/deploy/linux
           cp web-service/target/release/portviewer-web package/
           cp -R dist/. package/web-assets/
-          cp README.md LICENSE SECURITY.md package/
+          cp README.md README.zh-CN.md LICENSE SECURITY.md package/
+          cp docs/webgui-deployment.md docs/lan-port-api.md package/docs/
+          cp docs/api/portviewer-lan.openapi.yaml package/docs/api/
+          cp deploy/linux/portviewer-web.service deploy/linux/portviewer-web-full-attribution.conf package/deploy/linux/
+          cp deploy/linux/start.sh package/start.sh
+          chmod 755 package/portviewer-web package/start.sh
           tar -C package -czf PortViewer-WebGUI-linux-x64.tar.gz .
           sha256sum PortViewer-WebGUI-linux-x64.tar.gz > SHA256SUMS-linux.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -83,12 +95,13 @@ jobs:
 
   publish:
     name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [windows, linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: release
@@ -98,5 +111,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes
+          notes="docs/releases/$TAG.md"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY"; then
+            draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [ "$draft" != "true" ]; then
+              echo "Release $TAG is already public; keeping published assets unchanged."
+              exit 0
+            fi
+          else
+            if [ -f "$notes" ]; then
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "$TAG" --notes-file "$notes"
+            else
+              gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --generate-notes
+            fi
+          fi
           gh release upload "$TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

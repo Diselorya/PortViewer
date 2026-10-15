@@ -15,7 +15,35 @@ portviewer-web ──读取──> 系统端口与进程信息
 
 显式配置强 Token 后，服务可监听私有/未指定地址，但局域网只开放 health 与最小化端口 API；WebGUI、构建身份和完整扫描仍限制为 loopback。CLI/API/MCP 的完整配置见 [局域网端口接口指南](lan-port-api.md)。
 
-## Windows 前台启动
+## 使用下载的部署包
+
+从 GitHub Release 下载对应平台的 WebGUI 压缩包并完整解压，无需安装 Node.js 或 Rust。
+
+Windows 在解压目录中执行：
+
+```powershell
+.\portviewer-web.exe serve --assets .\web-assets
+```
+
+Linux 在解压目录中执行：
+
+```bash
+./start.sh
+```
+
+浏览器打开 `http://127.0.0.1:17890`。Linux 启动脚本使用自身目录定位二进制和资源，从其他工作目录调用也不会误用旧的 `dist`。
+
+注册 Linux systemd 服务前，从解压目录复制部署文件：
+
+```bash
+sudo install -d /opt/portviewer
+sudo install -m 755 portviewer-web /opt/portviewer/portviewer-web
+sudo cp -R web-assets /opt/portviewer/
+```
+
+然后按下文“Linux systemd 服务”创建专用账号、安装包内的 `deploy/linux/portviewer-web.service`；需要完整归因时，再显式启用同目录的 root drop-in。升级前先停止现有 `portviewer-web` 服务，整体替换二进制和 `web-assets`，完成后重启并检查 health 与 scan。
+
+## Windows 从源码前台启动
 
 安装 Node.js 22、Rust stable 和 Visual Studio C++ Build Tools 后，在仓库根目录执行：
 
@@ -70,7 +98,7 @@ Get-Service PortViewerWeb
 Invoke-RestMethod http://127.0.0.1:17890/api/health
 ```
 
-## Linux 前台启动
+## Linux 从源码前台启动
 
 需要 Node.js 22、Rust stable，以及发行版的 C/C++ 基础构建工具。
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import packageMetadata from "../../../../package.json";
 import AboutDialog from "../AboutDialog.vue";
 import { useAppStore } from "../../../stores/app";
 import type { PortEntry } from "../../../types/port";
@@ -63,7 +64,7 @@ describe("AboutDialog", () => {
 
     const text = render().text();
 
-    expect(text).toContain("PortViewer 1.0.0");
+    expect(text).toContain(`PortViewer ${packageMetadata.version}`);
     expect(text).toContain("扫描范围: V6 Tcp 完整 · V6 Udp 完整");
     expect(text).toContain("最新成功时间: 2026-08-23T00:00:00Z");
     expect(text).toContain("扫描耗时: 17 ms");

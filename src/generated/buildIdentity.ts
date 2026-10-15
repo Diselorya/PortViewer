@@ -2,7 +2,7 @@
 export const FRONTEND_BUILD_IDENTITY = {
   "schemaVersion": 1,
   "productId": "com.portviewer.desktop",
-  "productVersion": "1.0.0",
+  "productVersion": "1.1.0",
   "frontendContractVersion": 1,
-  "sourceHash": "55b46536d0744a2654e892cc76a7294eb11c8234c220c656dd8d84e6904c06a1"
+  "sourceHash": "00e460664c309837372e86e566799588e4628181081f88c57ce1011a974a0b55"
 } as const;

@@ -44,8 +44,9 @@ Grab the latest artifacts from [Releases](https://github.com/Diselorya/PortViewe
 | Artifact | What it is |
 |---|---|
 | `PortViewer-windows-x64-setup.exe` | Desktop app, online NSIS installer (downloads WebView2 if missing) |
-| Offline MSI | Desktop app with bundled WebView2 Runtime, fully offline |
-| `PortViewer-WebGUI-*.zip` | Read-only WebGUI service (Windows and Linux builds) |
+| `PortViewer-windows-x64-offline.msi` | Desktop app with bundled WebView2 Runtime, fully offline |
+| `PortViewer-WebGUI-windows-x64.zip` | Read-only WebGUI service for Windows x64 |
+| `PortViewer-WebGUI-linux-x64.tar.gz` | Read-only WebGUI service for Linux x64, with startup script and systemd templates |
 
 Requirements: Windows 10/11 x64 with the [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (preinstalled on supported systems). The WebGUI additionally runs on Linux. Every release ships a SHA-256 manifest.
 
