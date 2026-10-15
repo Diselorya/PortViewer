@@ -699,9 +699,11 @@ describe("app store", () => {
       visibleColumns: ["local_port", "process_name"],
     });
 
-    expect(settings.schemaVersion).toBe(2);
+    expect(settings.schemaVersion).toBe(3);
     expect(settings.visibleColumns).toEqual([
       "local_port",
+      "role",
+      "service_manager",
       "attribution",
       "process_name",
     ]);
@@ -710,6 +712,60 @@ describe("app store", () => {
         (field) => field === "attribution",
       ),
     ).toHaveLength(1);
+  });
+
+  it("should migrate v2 endpoint and owner columns without unhiding unrelated columns", () => {
+    expect(
+      validateSettings({
+        schemaVersion: 2,
+        visibleColumns: ["local_address", "local_port", "attribution"],
+      }).visibleColumns,
+    ).toEqual([
+      "local_address",
+      "local_port",
+      "role",
+      "service_manager",
+      "attribution",
+    ]);
+    expect(
+      validateSettings({ schemaVersion: 2, visibleColumns: ["protocol"] })
+        .visibleColumns,
+    ).toEqual(["protocol"]);
+    expect(
+      validateSettings({ schemaVersion: 3, visibleColumns: ["local_port"] })
+        .visibleColumns,
+    ).toEqual(["local_port"]);
+  });
+
+  it("should export the complete grouped view in group and intra-group sort order", async () => {
+    const store = useAppStore();
+    store.entries = [
+      entry({ pid: 1, local_port: 8080, service_manager: "Systemd" }),
+      entry({ pid: 2, local_port: 443, service_manager: "Docker" }),
+      entry({ pid: 3, local_port: 80, service_manager: "Docker" }),
+    ];
+    store.groupBy = "service_manager";
+    store.sort = [{ field: "local_port", order: 1 }];
+    store.setFacetFilter("service_manager", ["Docker", "Systemd"]);
+    store.selectEntry(store.entries[0]!);
+    invokeMock.mockResolvedValue("export.json");
+    await store.download("json");
+    const args = invokeMock.mock.calls.find(
+      ([command]) => command === "save_export",
+    )?.[1];
+    const exported = JSON.parse(args.contents);
+    expect(exported.entries.map((row: PortEntry) => row.pid)).toEqual([
+      3, 2, 1,
+    ]);
+    expect(exported.metadata).toMatchObject({
+      entryCount: 3,
+      groupBy: "service_manager",
+      sort: [{ field: "local_port", order: 1 }],
+      filters: { facets: { service_manager: ["Docker", "Systemd"] } },
+    });
+    expect(store.selectedEntry?.pid).toBe(1);
+    store.groupBy = null;
+    expect(store.viewEntries.map((row) => row.pid)).toEqual([3, 2, 1]);
   });
 
   it("tracks attribution coverage and reports only partial or failed resolvers", async () => {

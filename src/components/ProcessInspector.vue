@@ -6,6 +6,8 @@ import {
   confidenceLabel,
   kindLabel,
   primaryAttribution,
+  serviceManager,
+  serviceManagerLabel,
 } from "../domain/attribution";
 import {
   analyzeConnection,
@@ -14,6 +16,7 @@ import {
   remoteEndpoint,
 } from "../domain/connectionRelation";
 import { backendText, processStatusLabel, useI18n } from "../i18n";
+import { hasRemoteEndpoint } from "../domain/portFacets";
 import type { PortEntry } from "../types/port";
 
 const store = useAppStore();
@@ -37,7 +40,7 @@ const confidenceText = computed(() =>
 );
 
 function endpoint(e: PortEntry) {
-  return e.protocol === "Udp" || !e.remote_address
+  return !hasRemoteEndpoint(e)
     ? localEndpoint(e)
     : `${localEndpoint(e)} → ${remoteEndpoint(e)}`;
 }
@@ -62,6 +65,11 @@ function details() {
   const e = entry.value;
   return [
     sentence.value,
+    `${t("serviceManager")}: ${serviceManagerLabel(serviceManager(e), locale.value)}`,
+    `${t("localAddress")}: ${e.local_address}`,
+    `${t("localPort")}: ${e.local_port}`,
+    `${t("remoteAddress")}: ${hasRemoteEndpoint(e) ? e.remote_address : t("noFixedPeer")}`,
+    `${t("remotePort")}: ${hasRemoteEndpoint(e) ? e.remote_port : t("noFixedPeer")}`,
     `${t("localEndpoint")}: ${localEndpoint(e)}`,
     `${t("peer")}: ${remoteEndpoint(e)}`,
     `${t("state")}: ${e.protocol === "Tcp" ? state(e.state) : "UDP"}`,
@@ -103,6 +111,12 @@ function details() {
       </button>
     </header>
     <section class="workload-section">
+      <dl class="manager-fact">
+        <dt>{{ t("serviceManager") }}</dt>
+        <dd data-testid="inspector-service-manager">
+          {{ serviceManagerLabel(serviceManager(entry), locale) }}
+        </dd>
+      </dl>
       <h3>
         {{ t("serviceAttribution") }}
         <span>{{ entry.attributions?.length ?? 0 }}</span>

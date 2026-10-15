@@ -7,6 +7,9 @@ mod mcp;
 mod platform;
 mod ports;
 
+#[path = "../../src-tauri/src/service_manager.rs"]
+pub mod service_manager;
+
 use tracing_subscriber::EnvFilter;
 
 pub async fn run() -> Result<(), String> {

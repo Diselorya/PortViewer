@@ -78,6 +78,7 @@ fn make_entry(identity: EndpointIdentity, process: ProcessInfo) -> PortEntry {
         process_created_at: process.created_at,
         process_status: process.status,
         process_status_message: process.status_message,
+        service_manager: Default::default(),
         attributions: Vec::new(),
     }
 }

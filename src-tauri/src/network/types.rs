@@ -1,3 +1,4 @@
+use crate::service_manager::ServiceManager;
 use serde::{Deserialize, Serialize};
 
 /// 网络协议类型
@@ -63,6 +64,21 @@ pub enum AttributionKind {
     WindowsService,
     NodeApplication,
     PythonApplication,
+}
+
+impl AttributionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DockerContainer => "DockerContainer",
+            Self::NginxSite => "NginxSite",
+            Self::IisSite => "IisSite",
+            Self::IisAppPool => "IisAppPool",
+            Self::NssmService => "NssmService",
+            Self::WindowsService => "WindowsService",
+            Self::NodeApplication => "NodeApplication",
+            Self::PythonApplication => "PythonApplication",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,6 +161,9 @@ pub struct PortEntry {
     pub process_created_at: Option<String>,
     pub process_status: ProcessStatus,
     pub process_status_message: Option<String>,
+    /// 管理层与具体工作负载分开；基础扫描及旧数据没有证据时为 Unknown。
+    #[serde(default)]
+    pub service_manager: ServiceManager,
     /// 按可信度和产品优先级排序；第一个为表格主归属，其余候选在详情中完整展示。
     pub attributions: Vec<ServiceAttribution>,
 }

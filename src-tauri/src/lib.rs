@@ -3,6 +3,7 @@ mod commands;
 mod error;
 mod network;
 mod process;
+pub mod service_manager;
 
 use attribution::AttributionResolver;
 pub use process::resolver::ProcessResolver;

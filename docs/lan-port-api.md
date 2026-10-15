@@ -77,6 +77,8 @@ GET /api/v1/ports/check?ports=80,443,3000-3010&protocol=tcp&details=false
 
 详细查询示例：
 
+详细端点的 `service_manager` 将上级管理层与具体工作负载拆开，取值为 `Docker`、`Systemd`、`WindowsService`、`Nssm`、`Iis`、`Nginx` 或 `Unknown`。具体容器、服务和项目的名称、用途及路径仍位于 `attributions`；`Unknown` 表示没有足够证据，不能解释为进程没有受管理。基础扫描在未运行归属解析时也返回 `Unknown`。JSON API、CLI 和 MCP 使用相同字段，Markdown 输出单独显示“上级服务”。
+
 ```powershell
 $headers = @{ Authorization = "Bearer $env:PORTVIEWER_API_TOKEN" }
 Invoke-RestMethod -Headers $headers `

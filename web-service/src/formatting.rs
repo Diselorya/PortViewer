@@ -95,6 +95,20 @@ fn check_markdown(value: &CheckResponse) -> String {
                     markdown_text(process),
                     state
                 ));
+                let manager = endpoint
+                    .get("service_manager")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("Unknown");
+                let manager = match manager {
+                    "Docker" => "Docker",
+                    "Systemd" => "systemd",
+                    "WindowsService" => "Windows 服务",
+                    "Nssm" => "NSSM",
+                    "Iis" => "IIS",
+                    "Nginx" => "Nginx",
+                    _ => "未识别",
+                };
+                output.push_str(&format!("  上级服务：{manager}\n"));
                 if let Some(path) = endpoint
                     .get("process_path")
                     .and_then(serde_json::Value::as_str)

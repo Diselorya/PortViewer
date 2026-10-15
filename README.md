@@ -70,6 +70,8 @@ npm run build:installer
 npm run build:installer:offline
 ```
 
+Release maintainers can run `npm run release -- --check` followed by `npm run release` to publish a CI-verified version, synchronize configured remotes and refresh local installers with version/SHA-256 verification. See the [release guide](docs/releasing.md) for remote mappings and recovery.
+
 WebGUI (Windows/Linux, read-only):
 
 ```bash

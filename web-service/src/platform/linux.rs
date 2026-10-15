@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Instant, SystemTime};
 
+use crate::service_manager::ServiceManager;
 use netstat2::{get_sockets_info, AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, TcpState};
 use serde::Serialize;
 use serde_json::to_value;
@@ -44,6 +45,7 @@ struct Entry {
     process_created_at: Option<String>,
     process_status: ProcessStatus,
     process_status_message: Option<String>,
+    service_manager: ServiceManager,
     attributions: Vec<Attribution>,
 }
 
@@ -180,6 +182,7 @@ fn scan_internal(advanced: bool) -> Result<serde_json::Value, String> {
                 } else {
                     None
                 },
+                service_manager: ServiceManager::Unknown,
                 attributions: Vec::new(),
             });
         }
@@ -304,6 +307,8 @@ fn scan_internal(advanced: bool) -> Result<serde_json::Value, String> {
                     program_matches += 1;
                 }
             }
+            entry.service_manager =
+                ServiceManager::from_kinds(entry.attributions.iter().map(|item| item.kind));
             docker.report.matched_count += entry
                 .attributions
                 .iter()

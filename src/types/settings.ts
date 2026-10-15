@@ -3,7 +3,7 @@ export type ThemeOption = "light" | "dark" | "system";
 export type LanguageOption = "system" | "zh-CN" | "en-US";
 export type TableDensity = "compact" | "standard" | "comfortable";
 export interface AppSettings {
-  schemaVersion: 2;
+  schemaVersion: 3;
   refreshIntervalMs: 0 | 1000 | 2000 | 5000 | 10000 | 30000 | 60000;
   theme: ThemeOption;
   language: LanguageOption;
@@ -14,12 +14,18 @@ export interface AppSettings {
 }
 export const ALL_COLUMN_FIELDS: ReadonlyArray<PortColumnField> = [
   "protocol",
+  "ip_version",
   "local_address",
   "local_port",
+  "role",
   "remote_address",
   "remote_port",
   "state",
+  "service_manager",
   "attribution",
+  "attribution_kind",
+  "attribution_confidence",
+  "process_status",
   "pid",
   "process_name",
   "process_path",
@@ -29,15 +35,17 @@ export const DEFAULT_VISIBLE_COLUMNS: PortColumnField[] = [
   "protocol",
   "local_address",
   "local_port",
+  "role",
   "remote_address",
   "remote_port",
   "state",
+  "service_manager",
   "attribution",
   "pid",
   "process_name",
 ];
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   refreshIntervalMs: 5000,
   theme: "system",
   language: "system",

@@ -4,6 +4,12 @@ import { invoke, isWebRuntime } from "../services/backend";
 import { queryEntries } from "../domain/portQuery";
 import { createCsv, createJson } from "../domain/exportData";
 import { PRODUCT_VERSION } from "../domain/appMetadata";
+import { backendText } from "../i18n";
+import {
+  groupEntries,
+  type FacetField,
+  type FacetFilters,
+} from "../domain/portFacets";
 import {
   ALL_COLUMN_FIELDS,
   DEFAULT_SETTINGS,
@@ -41,7 +47,7 @@ export function validateSettings(value: unknown): AppSettings {
   const schemaVersion = (value as { schemaVersion?: unknown }).schemaVersion;
   if (
     schemaVersion !== undefined &&
-    (typeof schemaVersion !== "number" || ![1, 2].includes(schemaVersion))
+    (typeof schemaVersion !== "number" || ![1, 2, 3].includes(schemaVersion))
   )
     return structuredClone(DEFAULT_SETTINGS);
   const allowedColumns = new Set<PortColumnField>(ALL_COLUMN_FIELDS);
@@ -64,8 +70,15 @@ export function validateSettings(value: unknown): AppSettings {
       "attribution",
     );
   }
+  if (schemaVersion === 1 || schemaVersion === 2) {
+    visible = [...visible];
+    if (visible.includes("local_port") && !visible.includes("role"))
+      visible.splice(visible.indexOf("local_port") + 1, 0, "role");
+    if (visible.includes("attribution") && !visible.includes("service_manager"))
+      visible.splice(visible.indexOf("attribution"), 0, "service_manager");
+  }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     refreshIntervalMs: (refreshValues.includes(Number(r.refreshIntervalMs))
       ? r.refreshIntervalMs
       : 5000) as AppSettings["refreshIntervalMs"],
@@ -133,6 +146,8 @@ export const useAppStore = defineStore("app", () => {
     query = ref(""),
     protocols = ref<string[]>([]),
     states = ref<string[]>([]),
+    facetFilters = ref<FacetFilters>({}),
+    groupBy = ref<FacetField | null>(null),
     sort = ref<SortSpec[]>([]),
     selectedKey = ref<string | null>(null),
     settingsVisible = ref(false),
@@ -155,17 +170,31 @@ export const useAppStore = defineStore("app", () => {
     lifecycleToken = 0,
     scanGeneration = 0,
     started = false;
-  const filteredEntries = computed(() =>
+  const effectiveFacetFilters = computed<FacetFilters>(() => ({
+      ...facetFilters.value,
+      protocol: protocols.value,
+      state: states.value,
+    })),
+    filteredEntries = computed(() =>
       queryEntries(
         entries.value,
         query.value,
-        protocols.value,
-        states.value,
+        [],
+        [],
         sort.value,
+        effectiveFacetFilters.value,
       ),
     ),
-    viewEntries = computed(() =>
+    cappedEntries = computed(() =>
       filteredEntries.value.slice(0, settings.value.maxEntries),
+    ),
+    entryGroups = computed(() =>
+      groupBy.value ? groupEntries(cappedEntries.value, groupBy.value) : [],
+    ),
+    viewEntries = computed(() =>
+      groupBy.value
+        ? entryGroups.value.flatMap((group) => group.entries)
+        : cappedEntries.value,
     ),
     limitedEntries = computed(() =>
       entries.value.slice(0, settings.value.maxEntries),
@@ -195,7 +224,11 @@ export const useAppStore = defineStore("app", () => {
       () =>
         Number(Boolean(query.value.trim())) +
         protocols.value.length +
-        states.value.length,
+        states.value.length +
+        Object.values(facetFilters.value).reduce(
+          (count, values) => count + (values?.length ?? 0),
+          0,
+        ),
     ),
     attributionMatchedCount = computed(
       () => entries.value.filter((entry) => entry.attributions?.length).length,
@@ -205,7 +238,7 @@ export const useAppStore = defineStore("app", () => {
         .filter((report) => ["Partial", "Failed"].includes(report.status))
         .map(
           (report) =>
-            `${ui(report.resolver, report.resolver === "Windows 服务 / NSSM" ? "Windows Services / NSSM" : report.resolver)}：${ui(report.message ?? "解析未完整完成", "Resolver did not complete")}`,
+            `${ui(report.resolver, backendText("en-US", report.resolver))}：${ui(report.message ?? "解析未完整完成", report.message ? backendText("en-US", report.message) : "Resolver did not complete")}`,
         ),
     ),
     hasExplicitPermissionIssue = computed(
@@ -399,6 +432,13 @@ export const useAppStore = defineStore("app", () => {
     query.value = "";
     protocols.value = [];
     states.value = [];
+    facetFilters.value = {};
+  }
+  function setFacetFilter(field: FacetField, values: string[]) {
+    const unique = [...new Set(values)];
+    if (field === "protocol") protocols.value = unique;
+    else if (field === "state") states.value = unique;
+    else facetFilters.value = { ...facetFilters.value, [field]: unique };
   }
   function selectEntry(e: PortEntry | null) {
     selectedKey.value = e ? entryKey(e) : null;
@@ -545,7 +585,14 @@ export const useAppStore = defineStore("app", () => {
                   query: query.value,
                   protocols: [...protocols.value],
                   states: [...states.value],
+                  facets: Object.fromEntries(
+                    Object.entries(effectiveFacetFilters.value).map(
+                      ([field, values]) => [field, [...(values ?? [])]],
+                    ),
+                  ),
                 },
+                groupBy: groupBy.value,
+                sort: sort.value.map((spec) => ({ ...spec })),
                 entryCount: snapshot.length,
                 truncated: isTruncated.value,
               }),
@@ -589,6 +636,10 @@ export const useAppStore = defineStore("app", () => {
     query,
     protocols,
     states,
+    facetFilters,
+    effectiveFacetFilters,
+    groupBy,
+    entryGroups,
     sort,
     selectedKey,
     selectedEntry,
@@ -615,6 +666,7 @@ export const useAppStore = defineStore("app", () => {
     activeFilterCount,
     refresh,
     clearFilters,
+    setFacetFilter,
     selectEntry,
     canKill,
     openKill,

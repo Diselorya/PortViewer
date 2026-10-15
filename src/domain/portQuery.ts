@@ -1,4 +1,16 @@
-import { attributionLabel, attributionSearchText } from "./attribution";
+import {
+  attributionLabel,
+  attributionSearchText,
+  serviceManager,
+  serviceManagerLabel,
+} from "./attribution";
+import { analyzeConnection } from "./connectionRelation";
+import {
+  facetValues,
+  hasRemoteEndpoint,
+  type FacetFilters,
+  type FacetField,
+} from "./portFacets";
 import type { PortColumnField, PortEntry, SortSpec } from "../types/port";
 export type QueryField =
   | "port"
@@ -53,7 +65,8 @@ function matches(e: PortEntry, t: QueryToken) {
     pid = String(e.pid),
     name = (e.process_name ?? "").toLowerCase(),
     path = (e.process_path ?? "").toLowerCase(),
-    attribution = attributionSearchText(e),
+    attribution =
+      `${attributionSearchText(e)} ${serviceManager(e)} ${serviceManagerLabel(serviceManager(e))}`.toLowerCase(),
     ips = `${e.local_address} ${e.remote_address ?? ""}`.toLowerCase(),
     state = (e.state ?? "").toLowerCase(),
     protocol = e.protocol.toLowerCase();
@@ -93,16 +106,27 @@ function rank(e: PortEntry, tokens: QueryToken[]) {
     0,
   );
 }
+const sortCollator = new Intl.Collator("zh-CN", {
+  numeric: true,
+  sensitivity: "base",
+});
 function compare(a: unknown, b: unknown) {
   return typeof a === "number" && typeof b === "number"
     ? a - b
-    : String(a ?? "").localeCompare(String(b ?? ""), "zh-CN", {
-        numeric: true,
-        sensitivity: "base",
-      });
+    : sortCollator.compare(String(a ?? ""), String(b ?? ""));
 }
 function fieldValue(entry: PortEntry, field: PortColumnField): unknown {
-  return field === "attribution" ? attributionLabel(entry) : entry[field];
+  if (field === "attribution") return attributionLabel(entry);
+  if (field === "service_manager") return serviceManager(entry);
+  if (field === "role") return analyzeConnection(entry).role;
+  if (
+    (field === "remote_address" || field === "remote_port") &&
+    !hasRemoteEndpoint(entry)
+  )
+    return null;
+  if (field === "attribution_kind" || field === "attribution_confidence")
+    return facetValues(entry, field).join(" + ");
+  return entry[field];
 }
 export function queryEntries(
   entries: PortEntry[],
@@ -110,26 +134,37 @@ export function queryEntries(
   protocols: string[],
   states: string[],
   sort: SortSpec[],
+  facets: FacetFilters = {},
 ): PortEntry[] {
   const tokens = parseQuery(query),
     ps = new Set(protocols),
-    ss = new Set(states);
+    ss = new Set(states),
+    facetSets = Object.entries(facets)
+      .filter(([, values]) => values?.length)
+      .map(
+        ([field, values]) => [field as FacetField, new Set(values)] as const,
+      );
   return entries
     .filter(
       (e) =>
         (!ps.size || ps.has(e.protocol)) &&
         (!ss.size ||
           (e.protocol === "Tcp" && e.state !== null && ss.has(e.state))) &&
+        facetSets.every(([field, values]) =>
+          facetValues(e, field).some((value) => values.has(value)),
+        ) &&
         tokens.every((t) => matches(e, t)),
     )
-    .map((entry, index) => ({ entry, index, rank: rank(entry, tokens) }))
+    .map((entry, index) => ({
+      entry,
+      index,
+      rank: rank(entry, tokens),
+      sortValues: sort.map((spec) => fieldValue(entry, spec.field)),
+    }))
     .sort((a, b) => {
       if (!sort.length && a.rank !== b.rank) return b.rank - a.rank;
-      for (const s of sort) {
-        const c = compare(
-          fieldValue(a.entry, s.field),
-          fieldValue(b.entry, s.field),
-        );
+      for (const [index, s] of sort.entries()) {
+        const c = compare(a.sortValues[index], b.sortValues[index]);
         if (c) return c * s.order;
       }
       return a.index - b.index;

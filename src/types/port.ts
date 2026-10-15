@@ -33,6 +33,14 @@ export type AttributionKind =
   | "NodeApplication"
   | "PythonApplication";
 export type AttributionConfidence = "Exact" | "High" | "Medium";
+export type ServiceManager =
+  | "Docker"
+  | "Systemd"
+  | "WindowsService"
+  | "Nssm"
+  | "Iis"
+  | "Nginx"
+  | "Unknown";
 export interface AttributionFact {
   label: string;
   value: string;
@@ -60,6 +68,8 @@ export interface PortEntry {
   process_status: ProcessStatus;
   process_status_message: string | null;
   attributions: ServiceAttribution[];
+  /** Optional while reading snapshots from an older backend. */
+  service_manager?: ServiceManager;
 }
 export interface ScanScope {
   protocol: Protocol;
@@ -98,7 +108,11 @@ export interface AttributionResult {
   duration_ms: number;
 }
 export type PortColumnField =
-  Exclude<keyof PortEntry, "attributions"> | "attribution";
+  | Exclude<keyof PortEntry, "attributions">
+  | "attribution"
+  | "role"
+  | "attribution_kind"
+  | "attribution_confidence";
 export interface SortSpec {
   field: PortColumnField;
   order: 1 | -1;

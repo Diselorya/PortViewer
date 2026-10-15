@@ -88,7 +88,9 @@ function serviceName(entry: PortEntry): string {
 export function analyzeConnection(entry: PortEntry): ConnectionRelation {
   const service = serviceName(entry);
   if (entry.protocol === "Udp") {
-    return entry.remote_address && entry.remote_port !== null
+    return entry.remote_address &&
+      entry.remote_port !== null &&
+      entry.remote_port !== 0
       ? {
           role: "udp-peer",
           confidence: "medium",

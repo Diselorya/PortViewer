@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppHeader from "./components/layout/AppHeader.vue";
 import AppStatusBar from "./components/layout/AppStatusBar.vue";
+import ScanNotices from "./components/layout/ScanNotices.vue";
 import PortTableToolbar from "./components/port-table/PortTableToolbar.vue";
 import PortTable from "./components/port-table/PortTable.vue";
 import ProcessInspector from "./components/ProcessInspector.vue";
@@ -40,24 +41,6 @@ function shortcuts(e: KeyboardEvent) {
     void store.refresh();
   }
 }
-async function requestElevation() {
-  if (!window.confirm(t("elevateConfirm"))) return;
-  try {
-    const result = await store.restartElevated();
-    if (result === "UacCancelled") store.notify("info", t("uacCancelled"));
-    else if (result === "AlreadyElevated")
-      store.notify("info", t("alreadyElevated"));
-    else if (result === "PolicyBlocked")
-      store.notify("error", t("elevationBlocked"));
-    else if (result === "LaunchFailed")
-      store.notify("error", t("elevationFailed"));
-  } catch (error) {
-    store.notify(
-      "error",
-      `${t("elevationFailed")} ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
 const media = matchMedia("(prefers-color-scheme: dark)");
 watch(() => store.settings, applyTheme, { deep: true, immediate: true });
 watch(
@@ -85,64 +68,11 @@ onBeforeUnmount(() => {
     <div v-if="store.webReadOnly" class="banner info" role="status">
       {{ t("webReadOnly") }}
     </div>
-    <div v-if="store.settingsRecovered" class="banner warning">
-      {{ t("settingsRecovered")
-      }}<button @click="store.settingsRecovered = false">
-        {{ t("close") }}
-      </button>
-    </div>
-    <div v-if="store.scanError && store.stale" class="banner danger">
-      <span>{{
-        t("staleData", {
-          time: new Date(store.scannedAt!).toLocaleTimeString(locale),
-        })
-      }}</span
-      ><button @click="store.refresh">{{ t("retry") }}</button
-      ><code>{{ store.scanError }}</code>
-    </div>
-    <div v-if="store.scanIssues.length" class="banner warning" role="status">
-      {{
-        t("scopeUnavailable", {
-          issues: store.scanIssues.join(locale === "zh-CN" ? "；" : "; "),
-        })
-      }}<button @click="store.refresh">{{ t("retry") }}</button>
-    </div>
-    <div
-      v-if="store.attributionIssues.length"
-      class="banner warning"
-      role="status"
-    >
-      {{
-        t("attributionUnavailable", {
-          issues: store.attributionIssues.join(
-            locale === "zh-CN" ? "；" : "; ",
-          ),
-        })
-      }}
-    </div>
-    <div
-      v-if="store.hasExplicitPermissionIssue"
-      class="banner warning elevation-banner"
-    >
-      <span>{{
-        store.permissionLimitedCount > 0
-          ? t("permissionLimited", { count: store.permissionLimitedCount })
-          : t("attributionPermissionLimited")
-      }}</span>
-      <button
-        v-if="store.canRequestElevation"
-        class="elevate-btn"
-        :disabled="store.elevationBusy"
-        @click="requestElevation"
-      >
-        {{ store.elevationBusy ? t("elevateBusy") : t("elevate") }}
-      </button>
-    </div>
     <main class="workspace">
       <section class="table-pane"><PortTable /></section>
       <ProcessInspector v-if="store.selectedEntry" />
     </main>
-    <AppStatusBar /><SettingsDialog /><ConfirmKillDialog /><AboutDialog />
+    <ScanNotices /><AppStatusBar /><SettingsDialog /><ConfirmKillDialog /><AboutDialog />
     <div
       v-if="store.notification"
       class="notice"

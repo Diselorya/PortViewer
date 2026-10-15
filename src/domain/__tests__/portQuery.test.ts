@@ -215,4 +215,95 @@ describe("port query", () => {
       [],
     );
   });
+
+  it("should sort local address independently from numeric local port", () => {
+    const first = entry({
+      pid: 1,
+      local_address: "192.0.2.20",
+      local_port: 80,
+    });
+    const second = entry({
+      pid: 2,
+      local_address: "192.0.2.3",
+      local_port: 65535,
+    });
+    const third = entry({
+      pid: 3,
+      local_address: "192.0.2.1",
+      local_port: 443,
+    });
+    expect(
+      queryEntries(
+        [first, second, third],
+        "",
+        [],
+        [],
+        [{ field: "local_address", order: 1 }],
+      ).map((row) => row.pid),
+    ).toEqual([3, 2, 1]);
+    expect(
+      queryEntries(
+        [first, second, third],
+        "",
+        [],
+        [],
+        [{ field: "local_port", order: 1 }],
+      ).map((row) => row.pid),
+    ).toEqual([1, 3, 2]);
+  });
+
+  it("should sort derived role and legacy service manager instead of absent raw properties", () => {
+    const outbound = entry({
+      pid: 1,
+      state: "SynSent",
+      remote_address: "192.0.2.1",
+      remote_port: 443,
+      attributions: [
+        {
+          kind: "SystemdService",
+          name: "api",
+          description: null,
+          confidence: "Exact",
+          source: "systemctl",
+          facts: [],
+        },
+      ],
+    });
+    const listener = entry({
+      pid: 2,
+      state: "Listen",
+      service_manager: "Docker",
+    });
+    expect(
+      queryEntries(
+        [outbound, listener],
+        "",
+        [],
+        [],
+        [{ field: "role", order: 1 }],
+      ).map((row) => row.pid),
+    ).toEqual([2, 1]);
+    expect(
+      queryEntries(
+        [outbound, listener],
+        "",
+        [],
+        [],
+        [{ field: "service_manager", order: 1 }],
+      ).map((row) => row.pid),
+    ).toEqual([2, 1]);
+  });
+
+  it("should combine fielded search with finite facets without mutating entries", () => {
+    const docker = entry({ pid: 1, service_manager: "Docker" });
+    const systemd = entry({ pid: 2, service_manager: "Systemd" });
+    const source = [docker, systemd];
+    expect(
+      queryEntries(source, "process:node", [], [], [], {
+        service_manager: ["Docker"],
+        local_port: ["3000"],
+      }),
+    ).toEqual([docker]);
+    expect(source).toEqual([docker, systemd]);
+  });
 });

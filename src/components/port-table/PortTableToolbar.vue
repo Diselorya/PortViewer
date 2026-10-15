@@ -1,100 +1,210 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useAppStore } from "../../stores/app";
+import { ALL_COLUMN_FIELDS } from "../../types/settings";
 import type { PortColumnField } from "../../types/port";
+import {
+  FACET_FIELDS,
+  facetOptions,
+  type FacetField,
+} from "../../domain/portFacets";
+import { columnLabel, facetValueLabel } from "../../domain/portPresentation";
 import { useI18n } from "../../i18n";
-const store = useAppStore(),
-  protocols = ["Tcp", "Udp"],
-  states = [
-    "Listen",
-    "Established",
-    "TimeWait",
-    "CloseWait",
-    "SynSent",
-    "SynRcvd",
-    "FinWait1",
-    "FinWait2",
-    "Closed",
-    "Closing",
-    "LastAck",
-    "DeleteTcb",
-    "Unknown",
-  ],
-  availableColumns: Array<{
-    field: PortColumnField;
-    key:
-      | "protocol"
-      | "localEndpoint"
-      | "directionRole"
-      | "peer"
-      | "state"
-      | "processOwner";
-  }> = [
-    { field: "protocol", key: "protocol" },
-    { field: "local_address", key: "localEndpoint" },
-    { field: "local_port", key: "directionRole" },
-    { field: "remote_address", key: "peer" },
-    { field: "state", key: "state" },
-    { field: "attribution", key: "processOwner" },
-  ];
-const { state: stateText, t } = useI18n();
-const hasFilters = computed(() => store.activeFilterCount > 0);
-function toggle(target: string[], value: string) {
-  const i = target.indexOf(value);
-  i < 0 ? target.push(value) : target.splice(i, 1);
+
+const store = useAppStore();
+const { locale, t } = useI18n();
+const field = ref<FacetField>("state"),
+  optionSearch = ref(""),
+  optionPage = ref(0);
+const optionPageSize = 100;
+const selected = computed(() => store.effectiveFacetFilters[field.value] ?? []);
+const options = computed(() =>
+  facetOptions(store.entries, field.value, selected.value),
+);
+const matchingOptions = computed(() => {
+  const needle = optionSearch.value.trim().toLowerCase();
+  return needle
+    ? options.value.filter((option) =>
+        `${facetValueLabel(field.value, option.value, locale.value)} ${option.value}`
+          .toLowerCase()
+          .includes(needle),
+      )
+    : options.value;
+});
+const visibleOptions = computed(() =>
+  matchingOptions.value.slice(
+    optionPage.value * optionPageSize,
+    (optionPage.value + 1) * optionPageSize,
+  ),
+);
+const activeFilters = computed(() =>
+  FACET_FIELDS.flatMap((field) =>
+    (store.effectiveFacetFilters[field] ?? []).map((value) => ({
+      field,
+      value,
+    })),
+  ),
+);
+watch([field, optionSearch], () => {
+  optionPage.value = 0;
+});
+watch(field, () => {
+  optionSearch.value = "";
+});
+watch(
+  () => matchingOptions.value.length,
+  (length) => {
+    optionPage.value = Math.min(
+      optionPage.value,
+      Math.max(0, Math.ceil(length / optionPageSize) - 1),
+    );
+  },
+);
+
+function toggleFacet(target: FacetField, value: string) {
+  const values = store.effectiveFacetFilters[target] ?? [];
+  store.setFacetFilter(
+    target,
+    values.includes(value)
+      ? values.filter((item) => item !== value)
+      : [...values, value],
+  );
 }
-function changeState(event: Event) {
-  const value = (event.target as HTMLSelectElement).value;
-  store.states = value ? [value] : [];
+function changeGroup(event: Event) {
+  store.groupBy = ((event.target as HTMLSelectElement).value ||
+    null) as FacetField | null;
 }
 function toggleColumn(field: PortColumnField) {
   const next = [...store.settings.visibleColumns],
-    i = next.indexOf(field);
-  if (i >= 0 && next.length > 1) next.splice(i, 1);
-  else if (i < 0) next.push(field);
+    index = next.indexOf(field);
+  if (index >= 0 && next.length > 1) next.splice(index, 1);
+  else if (index < 0) next.push(field);
   store.updateSettings({ visibleColumns: next });
 }
 </script>
+
 <template>
-  <nav class="querybar" :aria-label="`${t('state')} / ${t('export')}`">
+  <nav class="querybar" :aria-label="`${t('filterField')} / ${t('export')}`">
     <div class="filter-scroll">
-      <div class="filter-group" aria-label="协议筛选">
+      <div class="filter-group" :aria-label="t('protocol')">
         <button
-          v-for="p in protocols"
-          :key="p"
+          v-for="protocol in ['Tcp', 'Udp']"
+          :key="protocol"
           class="chip"
-          :aria-pressed="store.protocols.includes(p)"
-          @click="toggle(store.protocols, p)"
+          :aria-pressed="store.protocols.includes(protocol)"
+          @click="toggleFacet('protocol', protocol)"
         >
-          {{ p.toUpperCase() }}
+          {{ protocol.toUpperCase() }}
         </button>
       </div>
-      <div class="separator"></div>
       <label
-        >{{ t("state")
-        }}<select :value="store.states[0] ?? ''" @change="changeState">
-          <option value="">{{ t("allStates") }}</option>
-          <option v-for="s in states" :key="s" :value="s">
-            {{ stateText(s as any) }}
+        >{{ t("filterField")
+        }}<select
+          v-model="field"
+          data-testid="facet-field"
+          :aria-label="t('filterField')"
+        >
+          <option v-for="value in FACET_FIELDS" :key="value" :value="value">
+            {{ columnLabel(value, locale) }}
           </option>
         </select></label
       >
-      <button v-if="hasFilters" class="text-btn" @click="store.clearFilters">
-        {{ t("clearFilters", { count: store.activeFilterCount }) }}
-      </button>
     </div>
+    <details class="menu facet-menu" data-testid="facet-values">
+      <summary
+        :aria-label="`${t('filterValues')} · ${columnLabel(field, locale)}`"
+      >
+        {{
+          selected.length
+            ? t("selectedValues", { count: selected.length })
+            : t("allValues")
+        }}
+      </summary>
+      <div class="menu-panel facet-panel">
+        <header>
+          <b>{{ columnLabel(field, locale) }}</b
+          ><button
+            class="text-btn"
+            :disabled="!selected.length"
+            @click="store.setFacetFilter(field, [])"
+          >
+            {{ t("clearField") }}
+          </button>
+        </header>
+        <input
+          v-model="optionSearch"
+          type="search"
+          data-testid="facet-value-search"
+          :aria-label="t('filterValueSearch')"
+          :placeholder="t('filterValueSearch')"
+        />
+        <div class="facet-options">
+          <label
+            v-for="option in visibleOptions"
+            :key="option.value"
+            :title="facetValueLabel(field, option.value, locale)"
+            ><input
+              type="checkbox"
+              :data-testid="`facet-option-${option.value}`"
+              :data-facet-field="field"
+              :value="option.value"
+              :checked="selected.includes(option.value)"
+              @change="toggleFacet(field, option.value)"
+            /><span>{{ facetValueLabel(field, option.value, locale) }}</span
+            ><small>{{ option.count }}</small></label
+          >
+          <p v-if="!visibleOptions.length">{{ t("noFilterValues") }}</p>
+        </div>
+        <footer v-if="matchingOptions.length > optionPageSize">
+          <button :disabled="optionPage === 0" @click="optionPage--">
+            {{ t("previousPage") }}</button
+          ><small>{{
+            t("optionPage", {
+              start: optionPage * optionPageSize + 1,
+              end: Math.min(
+                (optionPage + 1) * optionPageSize,
+                matchingOptions.length,
+              ),
+              count: matchingOptions.length,
+            })
+          }}</small
+          ><button
+            :disabled="
+              (optionPage + 1) * optionPageSize >= matchingOptions.length
+            "
+            @click="optionPage++"
+          >
+            {{ t("nextPage") }}
+          </button>
+        </footer>
+      </div>
+    </details>
+    <label class="group-selector"
+      >{{ t("groupBy")
+      }}<select
+        :value="store.groupBy ?? ''"
+        data-testid="group-by"
+        :aria-label="t('groupBy')"
+        @change="changeGroup"
+      >
+        <option value="">{{ t("noGrouping") }}</option>
+        <option v-for="value in FACET_FIELDS" :key="value" :value="value">
+          {{ columnLabel(value, locale) }}
+        </option>
+      </select></label
+    >
     <span class="result-count">{{
       t("matches", { count: store.filteredEntries.length })
     }}</span>
-    <details class="menu">
+    <details class="menu columns-menu">
       <summary>{{ t("columns") }}</summary>
       <div class="menu-panel">
-        <label v-for="c in availableColumns" :key="c.field"
+        <label v-for="column in ALL_COLUMN_FIELDS" :key="column"
           ><input
             type="checkbox"
-            :checked="store.settings.visibleColumns.includes(c.field)"
-            @change="toggleColumn(c.field)"
-          />{{ t(c.key) }}</label
+            :checked="store.settings.visibleColumns.includes(column)"
+            @change="toggleColumn(column)"
+          />{{ columnLabel(column, locale) }}</label
         >
       </div>
     </details>
@@ -115,4 +225,27 @@ function toggleColumn(field: PortColumnField) {
       </div>
     </details>
   </nav>
+  <div class="active-filters" data-testid="active-filters">
+    <button v-if="store.query" class="chip" @click="store.query = ''">
+      {{ store.query }} ×
+    </button>
+    <button
+      v-for="filter in activeFilters"
+      :key="`${filter.field}:${filter.value}`"
+      class="chip"
+      :data-facet-field="filter.field"
+      @click="toggleFacet(filter.field, filter.value)"
+    >
+      {{ columnLabel(filter.field, locale) }}:
+      {{ facetValueLabel(filter.field, filter.value, locale) }} ×
+    </button>
+    <span v-if="!store.activeFilterCount">{{ t("noActiveFilters") }}</span>
+    <button
+      v-else
+      class="text-btn clear-all-filters"
+      @click="store.clearFilters"
+    >
+      {{ t("clearFilters", { count: store.activeFilterCount }) }}
+    </button>
+  </div>
 </template>

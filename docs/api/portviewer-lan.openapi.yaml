@@ -151,7 +151,14 @@ components:
         isListening: { type: boolean }
         endpoints:
           type: array
-          items: { type: object, additionalProperties: true }
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              service_manager:
+                type: string
+                enum: [Docker, Systemd, WindowsService, Nssm, Iis, Nginx, Unknown]
+                description: Management layer identified from attribution evidence; Unknown does not assert that the process is unmanaged.
     FreePortRequest:
       type: object
       additionalProperties: false

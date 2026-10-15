@@ -301,6 +301,7 @@ mod tests {
             process_created_at: None,
             process_status: crate::network::types::ProcessStatus::Unavailable,
             process_status_message: None,
+            service_manager: Default::default(),
             attributions: Vec::new(),
         };
 

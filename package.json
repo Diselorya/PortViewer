@@ -1,7 +1,7 @@
 {
   "name": "portviewer",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Diselorya/PortViewer.git"
@@ -30,10 +30,12 @@
     "test:web": "cargo test --manifest-path web-service/Cargo.toml",
     "test:lan-interfaces": "node scripts/test-lan-interfaces.mjs",
     "test:linux-deployment": "node scripts/test-linux-deployment.mjs",
+    "test:release": "node --test scripts/release.test.mjs",
     "test:webgui-e2e": "playwright test",
     "build:installer": "npm run build:installer:online",
     "build:installer:online": "tauri build --features custom-protocol --bundles nsis --config src-tauri/tauri.online.conf.json",
     "build:installer:offline": "tauri build --features custom-protocol --bundles msi --config src-tauri/tauri.offline.conf.json",
+    "release": "node scripts/release.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

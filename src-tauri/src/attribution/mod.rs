@@ -8,6 +8,7 @@ mod system;
 use std::collections::HashSet;
 use std::thread;
 
+use crate::service_manager::ServiceManager;
 use docker::DockerSnapshot;
 use iis::IisSnapshot;
 use nginx::NginxSnapshot;
@@ -76,6 +77,8 @@ impl AttributionResolver {
             }
             deduplicate_and_sort(&mut attributions);
             update_match_counts(&mut reports, &attributions);
+            entry.service_manager =
+                ServiceManager::from_kinds(attributions.iter().map(|item| item.kind.as_str()));
             entry.attributions = attributions;
         }
         reports

@@ -3,6 +3,7 @@ import type {
   AttributionKind,
   PortEntry,
   ServiceAttribution,
+  ServiceManager,
 } from "../types/port";
 import type { AppLocale } from "../i18n";
 
@@ -41,6 +42,45 @@ const CONFIDENCE_LABELS_EN: Record<AttributionConfidence, string> = {
   High: "High",
   Medium: "Inferred",
 };
+
+export const SERVICE_MANAGERS: readonly ServiceManager[] = [
+  "Docker",
+  "Nssm",
+  "WindowsService",
+  "Systemd",
+  "Iis",
+  "Nginx",
+  "Unknown",
+];
+
+/** Infer only from attribution evidence, never the executable name or port. */
+export function serviceManager(entry: PortEntry): ServiceManager {
+  if (entry.service_manager && SERVICE_MANAGERS.includes(entry.service_manager))
+    return entry.service_manager;
+  const kinds = new Set((entry.attributions ?? []).map((item) => item.kind));
+  if (kinds.has("DockerContainer")) return "Docker";
+  if (kinds.has("NssmService")) return "Nssm";
+  if (kinds.has("WindowsService")) return "WindowsService";
+  if (kinds.has("SystemdService")) return "Systemd";
+  if (kinds.has("IisSite") || kinds.has("IisAppPool")) return "Iis";
+  if (kinds.has("NginxSite")) return "Nginx";
+  return "Unknown";
+}
+
+export function serviceManagerLabel(
+  value: ServiceManager,
+  locale: AppLocale = "zh-CN",
+): string {
+  return {
+    Docker: "Docker",
+    Nssm: "NSSM",
+    WindowsService: locale === "zh-CN" ? "Windows 服务" : "Windows Services",
+    Systemd: "systemd",
+    Iis: "IIS",
+    Nginx: "Nginx",
+    Unknown: locale === "zh-CN" ? "未识别" : "Unidentified",
+  }[value];
+}
 
 export function primaryAttribution(
   entry: PortEntry,
