@@ -61,7 +61,7 @@ export async function dispatchReleaseWithJournal(
       return recorded;
     state = {};
   }
-  const find = async () => {
+  const runs = async () => {
     const response = await client.api(
       `actions/workflows/release.yml/runs?head_sha=${sha}&event=workflow_dispatch&per_page=100`,
     );
@@ -70,10 +70,19 @@ export async function dispatchReleaseWithJournal(
         (run) =>
           run.head_sha === sha &&
           run.event === "workflow_dispatch" &&
-          run.head_branch === "main" &&
-          Date.parse(run.created_at) >= Date.parse(state.startedAt) - 1000,
+          run.head_branch === "main",
       )
-      .sort((left, right) => right.id - left.id)[0];
+      .sort((left, right) => right.id - left.id);
+  };
+  const find = async () => {
+    const candidates = await runs();
+    // Older journals retain their conservative timestamp rule. New dispatches use
+    // a server-issued ID boundary so local clock skew cannot hide the new run.
+    return candidates.find((run) =>
+      Number.isSafeInteger(state.baselineRunId)
+        ? run.id > state.baselineRunId
+        : Date.parse(run.created_at) >= Date.parse(state.startedAt) - 1000,
+    );
   };
   if (state.phase === "dispatching" || state.phase === "awaiting-run") {
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -88,10 +97,14 @@ export async function dispatchReleaseWithJournal(
       "上次调度结果未知，已保留 journal 且未重复 POST。稍后运行原命令会继续查找既存运行；只有在 GitHub 确认未收到调度后，才移除该版本 .tmp/release-state/*.json 重新调度。",
     );
   }
+  const existingRuns = await runs();
+  const baselineRunId = existingRuns[0]?.id ?? 0;
+  assert(Number.isSafeInteger(baselineRunId), "GitHub 运行 ID 无效");
   await save({
     sha,
     source,
     tag,
+    baselineRunId,
     startedAt: new Date().toISOString(),
     phase: "dispatching",
   });

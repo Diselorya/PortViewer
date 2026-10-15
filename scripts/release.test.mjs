@@ -919,17 +919,22 @@ test("should recover a workflow dispatch with a lost response from its journal w
     status: "in_progress",
     created_at: new Date().toISOString(),
   };
+  let dispatched = false;
   const client = new GitHubClient({
     repository: "fixture/repo",
     token: "fixture-token",
     sleepImpl: async () => {},
     fetchImpl: async (_url, options) => {
       methods.push(options.method);
-      if (options.method === "POST")
+      if (options.method === "POST") {
+        dispatched = true;
         throw new Error("dispatch accepted but response lost");
+      }
       return new Response(
         JSON.stringify(
-          _url.includes("/runs?") ? { workflow_runs: [run] } : run,
+          _url.includes("/runs?")
+            ? { workflow_runs: dispatched ? [run] : [] }
+            : run,
         ),
         { status: 200 },
       );
@@ -945,7 +950,9 @@ test("should recover a workflow dispatch with a lost response from its journal w
   assert.equal((await dispatchReleaseWithJournal(client, options)).id, 77);
   assert.equal((await dispatchReleaseWithJournal(client, options)).id, 77);
   assert.equal(methods.filter((method) => method === "POST").length, 1);
+  assert.deepEqual(methods.slice(0, 2), ["GET", "POST"]);
   assert.equal(JSON.parse(await readFile(stateFile, "utf8")).runId, 77);
+  assert.equal(JSON.parse(await readFile(stateFile, "utf8")).baselineRunId, 0);
 });
 
 test("should keep an unknown dispatch journal and refuse blind duplicate publishing", async (t) => {
@@ -980,10 +987,184 @@ test("should keep an unknown dispatch journal and refuse blind duplicate publish
     /未重复 POST/,
   );
   assert.equal(posts, 1);
+  assert.equal(JSON.parse(await readFile(stateFile, "utf8")).baselineRunId, 0);
   assert.equal(
     JSON.parse(await readFile(stateFile, "utf8")).phase,
     "dispatching",
   );
+});
+
+for (const skewMinutes of [-5, 5]) {
+  test(`should discover the dispatched run when GitHub time differs from local time by ${skewMinutes} minutes`, async (t) => {
+    const root = await temporary(t),
+      stateFile = path.join(root, "state.json");
+    let posts = 0;
+    const run = {
+      id: 101,
+      head_sha: SHA,
+      head_branch: "main",
+      event: "workflow_dispatch",
+      status: "queued",
+      created_at: new Date(Date.now() + skewMinutes * 60_000).toISOString(),
+    };
+    const client = new GitHubClient({
+      repository: "fixture/repo",
+      token: "fixture-token",
+      sleepImpl: async () => {},
+      fetchImpl: async (_url, options) => {
+        if (options.method === "POST") {
+          posts++;
+          return new Response(null, { status: 204 });
+        }
+        return new Response(
+          JSON.stringify({ workflow_runs: posts ? [run] : [] }),
+          { status: 200 },
+        );
+      },
+    });
+    assert.equal(
+      (
+        await dispatchReleaseWithJournal(client, {
+          stateFile,
+          sha: SHA,
+          source: "c".repeat(40),
+          tag: "v1.2.0",
+          sleepImpl: async () => {},
+        })
+      ).id,
+      101,
+    );
+    assert.equal(posts, 1);
+    assert.equal(
+      JSON.parse(await readFile(stateFile, "utf8")).baselineRunId,
+      0,
+    );
+  });
+}
+
+test("should ignore pre-dispatch runs and require new run ID, SHA, event and main to match", async (t) => {
+  const root = await temporary(t),
+    stateFile = path.join(root, "state.json");
+  let posts = 0,
+    readsAfterPost = 0;
+  const old = {
+    id: 100,
+    head_sha: SHA,
+    head_branch: "main",
+    event: "workflow_dispatch",
+    status: "completed",
+    conclusion: "success",
+    created_at: "2099-01-01T00:00:00Z",
+  };
+  const fresh = {
+    ...old,
+    id: 101,
+    status: "queued",
+    conclusion: null,
+    created_at: "2000-01-01T00:00:00Z",
+  };
+  const client = new GitHubClient({
+    repository: "fixture/repo",
+    token: "fixture-token",
+    sleepImpl: async () => {},
+    fetchImpl: async (_url, options) => {
+      if (options.method === "POST") {
+        posts++;
+        return new Response(null, { status: 204 });
+      }
+      const runs = !posts
+        ? [{ ...old, id: 90 }, old]
+        : ++readsAfterPost === 1
+          ? [old]
+          : [
+              old,
+              fresh,
+              { ...fresh, id: 102, head_sha: "d".repeat(40) },
+              { ...fresh, id: 103, event: "push" },
+              { ...fresh, id: 104, head_branch: "other" },
+            ];
+      return new Response(JSON.stringify({ workflow_runs: runs }), {
+        status: 200,
+      });
+    },
+  });
+  assert.equal(
+    (
+      await dispatchReleaseWithJournal(client, {
+        stateFile,
+        sha: SHA,
+        source: "c".repeat(40),
+        tag: "v1.2.0",
+        sleepImpl: async () => {},
+      })
+    ).id,
+    101,
+  );
+  assert.equal(posts, 1);
+  assert.equal(readsAfterPost, 2);
+  assert.equal(
+    JSON.parse(await readFile(stateFile, "utf8")).baselineRunId,
+    100,
+  );
+});
+
+test("should resume dispatch discovery from the saved run baseline without another POST or clock comparison", async (t) => {
+  const root = await temporary(t),
+    stateFile = path.join(root, "state.json");
+  await writeFile(
+    stateFile,
+    JSON.stringify({
+      sha: SHA,
+      source: "c".repeat(40),
+      tag: "v1.2.0",
+      phase: "awaiting-run",
+      baselineRunId: 100,
+      startedAt: "2099-01-01T00:00:00Z",
+    }),
+  );
+  let posts = 0;
+  const old = {
+    id: 100,
+    head_sha: SHA,
+    head_branch: "main",
+    event: "workflow_dispatch",
+    status: "completed",
+    created_at: "2099-01-01T00:00:00Z",
+  };
+  const fresh = {
+    ...old,
+    id: 101,
+    status: "in_progress",
+    created_at: "2000-01-01T00:00:00Z",
+  };
+  const client = new GitHubClient({
+    repository: "fixture/repo",
+    token: "fixture-token",
+    sleepImpl: async () => {},
+    fetchImpl: async (_url, options) => {
+      if (options.method === "POST") {
+        posts++;
+        throw new Error("must not repeat dispatch");
+      }
+      return new Response(JSON.stringify({ workflow_runs: [old, fresh] }), {
+        status: 200,
+      });
+    },
+  });
+  assert.equal(
+    (
+      await dispatchReleaseWithJournal(client, {
+        stateFile,
+        sha: SHA,
+        source: "c".repeat(40),
+        tag: "v1.2.0",
+        sleepImpl: async () => {},
+      })
+    ).id,
+    101,
+  );
+  assert.equal(posts, 0);
+  assert.equal(JSON.parse(await readFile(stateFile, "utf8")).runId, 101);
 });
 
 test("should refuse source or public branch movement while CI is running", () => {

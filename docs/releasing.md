@@ -41,4 +41,4 @@ npm run release -- --sync-only --tag v1.1.0
 
 可用 Actions 界面手动运行 Release：选择公开 `main`，填写 `expected_sha` 的完整提交 SHA；勾选 `publish` 才公开 Release，不勾选时只构建并保留 Actions 产物。无需创建临时分支。标签已有且指向错误提交、CI 缺失/失败、版本或校验不符时均不公开。
 
-下载采用有界分段重试和 Range 续传，每次请求前先清空尾段；只接收区间与总长度都符合的 `Content-Range`，TLS 中断后保留验证过响应头的有效前缀，最终完整 SHA-256 通过才接受。下载每 20 秒显示已保留字节进度，GitHub API 只读 GET 对临时网络/服务端故障有界重试。中断、调度失败或同步失败后运行原命令恢复：快照无变化不重复提交，已有工作流运行可继续等待，已公开资产不覆盖，已完成且 digest 正确的本地下载可复用。调度前原子写入 journal；POST 响应丢失时，重跑先按 SHA 与开始时间查证既存运行，结果未知时停止并保留 journal，避免重复发布。暂存状态保存在 `.tmp/release-state/` 与 `.tmp/release-download/`。
+下载采用有界分段重试和 Range 续传，每次请求前先清空尾段；只接收区间与总长度都符合的 `Content-Range`，TLS 中断后保留验证过响应头的有效前缀，最终完整 SHA-256 通过才接受。下载每 20 秒显示已保留字节进度，GitHub API 只读 GET 对临时网络/服务端故障有界重试。中断、调度失败或同步失败后运行原命令恢复：快照无变化不重复提交，已有工作流运行可继续等待，已公开资产不覆盖，已完成且 digest 正确的本地下载可复用。调度前查询已有运行并将最大运行 ID 原子写入 journal；POST 响应丢失时，重跑按精确 SHA、公开分支、事件及新增运行 ID 查证，避免本机时间偏差影响恢复。结果未知时停止并保留 journal，避免重复发布。暂存状态保存在 `.tmp/release-state/` 与 `.tmp/release-download/`。
