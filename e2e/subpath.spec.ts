@@ -133,8 +133,8 @@ for (const entry of ["/portviewer/", "/portviewer/?theme=dark#details"]) {
     const row = page.locator("tbody tr", { hasText: SELF_PORT }).first();
     await expect(row).toBeVisible();
     await row.click();
-    await expect(page.locator("aside.inspector")).toBeVisible();
-    await expect(page.locator("aside.inspector")).toContainText(
+    await expect(page.getByTestId("detail-drawer")).toBeVisible();
+    await expect(page.getByTestId("detail-drawer")).toContainText(
       /portviewer-web/i,
     );
 

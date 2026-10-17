@@ -72,16 +72,19 @@ describe("port workload summary", () => {
     localStorage.clear();
     setActivePinia(createPinia());
   });
-  it("exposes the container name, real purpose, mode and project path in the row", () => {
+  it("should separate the container name and purpose and open its full evidence", async () => {
     const store = useAppStore();
     store.hasScanned = true;
     store.entries = [entry];
-    const owner = render().get(".owner-cell");
-    expect(owner.get("b").text()).toBe("warehouse-api");
-    expect(owner.text()).toContain("仓库库存查询 API");
-    expect(owner.text()).toContain("compose · /srv/warehouse");
-    expect(owner.text()).toContain("docker-proxy");
-    expect(owner.attributes("title")).toContain("Docker Engine published port");
+    const wrapper = render();
+    expect(wrapper.get(".service-name-action b").text()).toBe("warehouse-api");
+    expect(wrapper.get(".service-description").text()).toBe("仓库库存查询 API");
+    await wrapper.get(".owner-cell").trigger("click");
+    expect(store.selectedDetail?.kind).toBe("service");
+    expect(store.detailEntry?.attributions[0]?.facts).toEqual(
+      entry.attributions[0]?.facts,
+    );
+    expect(store.detailEntry?.process_name).toBe("docker-proxy");
   });
   it("keeps an unattributed Linux endpoint visible with an explicit unknown owner", () => {
     const store = useAppStore();
@@ -98,7 +101,7 @@ describe("port workload summary", () => {
     ];
     const owner = render().get(".owner-cell");
     expect(owner.text()).toContain("归属未知");
-    expect(owner.text()).toContain("进程归因受限");
+    expect(store.entries[0]?.process_status).toBe("AccessDenied");
     expect(owner.text()).not.toContain("System");
   });
   it("states when purpose metadata is missing rather than inventing a project description", () => {
@@ -110,6 +113,6 @@ describe("port workload summary", () => {
         attributions: [{ ...entry.attributions[0]!, description: null }],
       },
     ];
-    expect(render().get(".owner-cell").text()).toContain("用途未提供");
+    expect(render().get(".service-description").text()).toContain("用途未提供");
   });
 });

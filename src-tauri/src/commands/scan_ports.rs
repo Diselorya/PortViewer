@@ -78,6 +78,14 @@ fn scan_all_scopes(resolver: &ProcessResolver) -> AppResult<ScanResult> {
             apply_process_info(entry, process);
         }
     }
+    crate::knowledge::observe_scan(
+        result
+            .entries
+            .iter()
+            .map(|entry| entry.local_address.as_str()),
+        !result.is_partial,
+    );
+    register_profiles(&mut result.entries);
     result.scan_duration_ms = started.elapsed().as_millis() as u64;
     Ok(result)
 }
@@ -119,6 +127,7 @@ fn enrich_entries(
     let live = live_endpoint_identities()?;
     entries.retain(|entry| live.contains(&EndpointIdentity::from(entry)));
     let reports = attribution_resolver.enrich(&mut entries);
+    register_profiles(&mut entries);
     Ok(AttributionResult {
         entries,
         reports,
@@ -259,6 +268,14 @@ fn days_to_date(mut days: i64) -> (i64, u32, u32) {
     (year, month as u32, day as u32)
 }
 
+fn register_profiles(entries: &mut [PortEntry]) {
+    for entry in entries {
+        if let Ok(value) = serde_json::to_value(&*entry) {
+            entry.service_profile_ids = crate::knowledge::register_port(&value);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,6 +319,7 @@ mod tests {
             process_status: crate::network::types::ProcessStatus::Unavailable,
             process_status_message: None,
             service_manager: Default::default(),
+            service_profile_ids: Vec::new(),
             attributions: Vec::new(),
         };
 

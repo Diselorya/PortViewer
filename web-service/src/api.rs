@@ -100,7 +100,13 @@ fn router(state: AppState, assets: Option<PathBuf>) -> Router {
     let mut app = Router::new()
         .route("/api/health", get(health))
         .route("/api/v1/ports/check", get(check))
-        .route("/api/v1/ports/free", post(free));
+        .route("/api/v1/ports/free", post(free))
+        .route("/api/v1/knowledge/profiles", post(knowledge_profiles))
+        .route("/api/v1/knowledge/host", get(knowledge_host))
+        .route(
+            "/api/v1/knowledge/settings",
+            get(knowledge_settings).put(update_knowledge_settings),
+        );
     if let Some(assets) = assets {
         let index = assets.join("index.html");
         app = app
@@ -281,6 +287,33 @@ async fn validate_lan_request(
         )
         .into_response();
     }
+    if path.starts_with("/api/v1/knowledge/") {
+        let auth = authorization_status(state.token.as_deref(), request.headers());
+        if auth == AuthResult::Invalid {
+            return ApiProblem::unauthorized().into_response();
+        }
+        if !remote.ip().is_loopback() {
+            if request.method() != axum::http::Method::GET && path == "/api/v1/knowledge/settings" {
+                return ApiProblem::new(
+                    StatusCode::FORBIDDEN,
+                    "local_settings_only",
+                    "仅本机界面可更改知识补充设置",
+                )
+                .into_response();
+            }
+            if state.token.is_none() {
+                return ApiProblem::new(
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "token_not_configured",
+                    "服务端未配置高级查询 Token",
+                )
+                .into_response();
+            }
+            if auth != AuthResult::Valid {
+                return ApiProblem::unauthorized().into_response();
+            }
+        }
+    }
     if !valid_host(request.headers(), &state.allowed_hosts) {
         warn!("拒绝无效 Host 请求");
         return ApiProblem::bad_request(
@@ -299,7 +332,12 @@ async fn validate_lan_request(
 fn is_remote_api_path(path: &str) -> bool {
     matches!(
         path,
-        "/api/health" | "/api/v1/ports/check" | "/api/v1/ports/free"
+        "/api/health"
+            | "/api/v1/ports/check"
+            | "/api/v1/ports/free"
+            | "/api/v1/knowledge/profiles"
+            | "/api/v1/knowledge/host"
+            | "/api/v1/knowledge/settings"
     )
 }
 
@@ -574,4 +612,52 @@ mod tests {
         assert_eq!(normalized["frontendSourceHash"], "abc");
         assert!(normalized.get("sourceHash").is_none());
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KnowledgeHostQuery {
+    address: Option<String>,
+}
+
+async fn knowledge_profiles(
+    request: Result<Json<crate::knowledge::ServiceProfilesQuery>, JsonRejection>,
+) -> Result<Json<crate::knowledge::ServiceProfilesResult>, ApiProblem> {
+    let Json(query) = request
+        .map_err(|_| ApiProblem::bad_request("invalid_knowledge_query", "资料查询格式无效"))?;
+    crate::knowledge::profiles(query)
+        .map(Json)
+        .map_err(|message| ApiProblem::bad_request("invalid_knowledge_query", &message))
+}
+async fn knowledge_host(
+    query: Result<Query<KnowledgeHostQuery>, QueryRejection>,
+) -> Result<Json<crate::knowledge::HostContext>, ApiProblem> {
+    let Query(query) =
+        query.map_err(|_| ApiProblem::bad_request("invalid_host_query", "主机查询格式无效"))?;
+    crate::knowledge::host_context(query.address.as_deref())
+        .map(Json)
+        .map_err(|message| ApiProblem::bad_request("invalid_host_query", &message))
+}
+async fn knowledge_settings(
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+) -> Json<crate::knowledge::KnowledgeConfiguration> {
+    Json(crate::knowledge::configuration(remote.ip().is_loopback()))
+}
+async fn update_knowledge_settings(
+    ConnectInfo(remote): ConnectInfo<SocketAddr>,
+    request: Result<Json<crate::knowledge::KnowledgeSettings>, JsonRejection>,
+) -> Result<Json<crate::knowledge::KnowledgeConfiguration>, ApiProblem> {
+    if !remote.ip().is_loopback() {
+        return Err(ApiProblem::new(
+            StatusCode::FORBIDDEN,
+            "local_settings_only",
+            "仅本机界面可更改知识补充设置",
+        ));
+    }
+    let Json(settings) = request.map_err(|_| {
+        ApiProblem::bad_request("invalid_knowledge_settings", "知识补充设置格式无效")
+    })?;
+    crate::knowledge::set_settings(settings, true)
+        .map(Json)
+        .map_err(|message| ApiProblem::bad_request("invalid_knowledge_settings", &message))
 }

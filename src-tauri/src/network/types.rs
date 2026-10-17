@@ -166,6 +166,8 @@ pub struct PortEntry {
     pub service_manager: ServiceManager,
     /// 按可信度和产品优先级排序；第一个为表格主归属，其余候选在详情中完整展示。
     pub attributions: Vec<ServiceAttribution>,
+    #[serde(default)]
+    pub service_profile_ids: Vec<String>,
 }
 
 /// 危险操作使用的稳定端点身份，不包含易变的 TCP 状态或展示型进程字段。

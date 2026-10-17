@@ -10,7 +10,28 @@ import type {
 
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (...args: unknown[]) => invokeMock(...args),
+  invoke: (command: string, ...args: unknown[]) => {
+    if (command === "get_knowledge_settings")
+      return Promise.resolve({
+        online_enabled: true,
+        reverse_dns_enabled: true,
+        ai_enabled: false,
+        ai_configured: false,
+        ai_provider: null,
+        ai_model: null,
+        can_configure: true,
+      });
+    if (command === "get_service_profiles")
+      return Promise.resolve({
+        profiles: [],
+        pending_count: 0,
+        online_enabled: true,
+        ai_configured: false,
+        ai_enabled: false,
+      });
+    if (command === "get_host_context") return Promise.resolve(null);
+    return invokeMock(command, ...args);
+  },
 }));
 const standardPrivilege = {
   is_elevated: false,
@@ -699,8 +720,10 @@ describe("app store", () => {
       visibleColumns: ["local_port", "process_name"],
     });
 
-    expect(settings.schemaVersion).toBe(3);
+    expect(settings.schemaVersion).toBe(4);
     expect(settings.visibleColumns).toEqual([
+      "service_name",
+      "service_description",
       "local_port",
       "role",
       "service_manager",
@@ -721,6 +744,8 @@ describe("app store", () => {
         visibleColumns: ["local_address", "local_port", "attribution"],
       }).visibleColumns,
     ).toEqual([
+      "service_name",
+      "service_description",
       "local_address",
       "local_port",
       "role",
@@ -870,7 +895,9 @@ describe("app store", () => {
 
     expect(invokeMock).toHaveBeenCalledWith("save_export", {
       suggestedName: expect.stringMatching(/^PortViewer_\d{8}\d{6}\.csv$/),
-      contents: expect.stringContaining("\uFEFF协议,IP 版本"),
+      contents: expect.stringContaining(
+        "\uFEFF服务中文名,服务描述,本地端口,本地地址",
+      ),
       format: "csv",
     });
     expect(store.notification).toEqual({
@@ -917,5 +944,32 @@ describe("app store", () => {
       theme: "system",
       refreshIntervalMs: 5000,
     });
+  });
+  it("should export descending grouped ports in the same priority order as the table", async () => {
+    const store = useAppStore();
+    store.entries = [
+      entry({ pid: 1, local_port: 80 }),
+      entry({ pid: 2, local_port: 8080 }),
+      entry({ pid: 3, local_port: 443 }),
+    ];
+    store.setGroupBy("local_port");
+    store.setSortSpecs([{ field: "local_port", order: -1 }]);
+    expect(store.entryGroups.map((group) => group.values)).toEqual([
+      ["8080"],
+      ["443"],
+      ["80"],
+    ]);
+    invokeMock.mockResolvedValue("export.json");
+    await store.download("json");
+    const args = invokeMock.mock.calls.find(
+      ([command]) => command === "save_export",
+    )?.[1];
+    const exported = JSON.parse(args.contents);
+    expect(exported.entries.map((row: PortEntry) => row.local_port)).toEqual([
+      8080, 443, 80,
+    ]);
+    expect(exported.metadata.sort).toEqual([
+      { field: "local_port", order: -1 },
+    ]);
   });
 });

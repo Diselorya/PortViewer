@@ -29,6 +29,7 @@ export function webFiles(version = "1.2.0", linux = false) {
       ["SECURITY.md", "Security"],
       ["docs/webgui-deployment.md", "Deploy"],
       ["docs/lan-port-api.md", "API"],
+      ["docs/service-knowledge.md", "Service knowledge and optional AI"],
       ["docs/api/portviewer-lan.openapi.yaml", "openapi: 3.0.3"],
       ["web-assets/index.html", "<!doctype html><title>PortViewer</title>"],
       ["web-assets/assets/main.js", "console.log('fixture');"],

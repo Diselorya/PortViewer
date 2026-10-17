@@ -29,6 +29,12 @@ struct DockerMapping {
     image: String,
     compose_project: Option<String>,
     compose_service: Option<String>,
+    working_dir: String,
+    compose_dir: Option<String>,
+    compose_files: Option<String>,
+    description: Option<String>,
+    source_url: Option<String>,
+    mounts: Vec<InspectMount>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -38,6 +44,8 @@ struct InspectContainer {
     name: String,
     config: InspectConfig,
     network_settings: InspectNetworkSettings,
+    #[serde(default)]
+    mounts: Vec<InspectMount>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,7 +53,16 @@ struct InspectContainer {
 struct InspectConfig {
     image: String,
     #[serde(default)]
+    working_dir: String,
+    #[serde(default)]
     labels: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct InspectMount {
+    source: String,
+    destination: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,17 +124,25 @@ impl DockerSnapshot {
         if ids.is_empty() {
             return Ok(Self::default());
         }
-        let mut arguments = vec!["inspect".to_string()];
+        let mut arguments = vec![
+            "inspect".to_string(),
+            "--format".to_string(),
+            INSPECT_TEMPLATE.to_string(),
+        ];
         arguments.extend(ids);
         let argument_refs: Vec<&str> = arguments.iter().map(String::as_str).collect();
         let inspect = run_limited(&docker, &argument_refs, Duration::from_secs(5))?;
         // A container can disappear between `ps` and `inspect`. Docker then exits
         // non-zero while still returning valid JSON for the surviving IDs. Keep
         // those results instead of dropping attribution for every container.
-        let containers: Vec<InspectContainer> =
-            serde_json::from_slice(&inspect.stdout).map_err(|error| {
+        let containers: Vec<InspectContainer> = utf8(&inspect.stdout)
+            .lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(serde_json::from_str)
+            .collect::<Result<_, _>>()
+            .map_err(|_| {
                 if inspect.success {
-                    format!("Docker inspect 结果格式无效：{error}")
+                    "Docker inspect 结果格式无效".to_owned()
                 } else {
                     command_error("无法读取 Docker 容器详情", &inspect.stderr)
                 }
@@ -128,16 +153,27 @@ impl DockerSnapshot {
     fn from_inspect(containers: Vec<InspectContainer>) -> Self {
         let mut mappings = Vec::new();
         for container in containers {
-            let compose_project = container
-                .config
-                .labels
-                .as_ref()
-                .and_then(|labels| labels.get("com.docker.compose.project").cloned());
-            let compose_service = container
-                .config
-                .labels
-                .as_ref()
-                .and_then(|labels| labels.get("com.docker.compose.service").cloned());
+            let compose_project = container.config.labels.as_ref().and_then(|labels| {
+                labels
+                    .get("com.docker.compose.project")
+                    .filter(|value| !value.is_empty())
+                    .cloned()
+            });
+            let compose_service = container.config.labels.as_ref().and_then(|labels| {
+                labels
+                    .get("com.docker.compose.service")
+                    .filter(|value| !value.is_empty())
+                    .cloned()
+            });
+            let metadata = |key: &str| {
+                container
+                    .config
+                    .labels
+                    .as_ref()
+                    .and_then(|labels| labels.get(key))
+                    .filter(|value| !value.trim().is_empty())
+                    .map(|value| crate::knowledge::clean(value, 2048))
+            };
             for (container_endpoint, bindings) in container
                 .network_settings
                 .ports
@@ -163,6 +199,12 @@ impl DockerSnapshot {
                         image: container.config.image.clone(),
                         compose_project: compose_project.clone(),
                         compose_service: compose_service.clone(),
+                        working_dir: container.config.working_dir.clone(),
+                        compose_dir: metadata("com.docker.compose.project.working_dir"),
+                        compose_files: metadata("com.docker.compose.project.config_files"),
+                        description: metadata("org.opencontainers.image.description"),
+                        source_url: metadata("org.opencontainers.image.source"),
+                        mounts: container.mounts.iter().take(64).cloned().collect(),
                     });
                 }
             }
@@ -208,10 +250,37 @@ impl DockerSnapshot {
                 if let Some(compose) = compose {
                     facts.push(fact("Compose", compose));
                 }
+                if !mapping.working_dir.is_empty() {
+                    facts.push(fact(
+                        "容器路径",
+                        crate::knowledge::clean(&mapping.working_dir, 2048),
+                    ));
+                }
+                if let Some(path) = &mapping.compose_dir {
+                    facts.push(fact("Compose路径", crate::knowledge::clean(path, 2048)));
+                }
+                if let Some(path) = &mapping.compose_files {
+                    facts.push(fact("Compose配置", crate::knowledge::clean(path, 2048)));
+                }
+                for mount in mapping.mounts.iter().take(64) {
+                    facts.push(fact(
+                        "挂载路径",
+                        crate::knowledge::clean(
+                            &format!("{} → {}", mount.source, mount.destination),
+                            2048,
+                        ),
+                    ));
+                }
+                if mapping.description.is_some() {
+                    facts.push(fact("简介来源", "OCI image description label"));
+                }
+                if let Some(url) = &mapping.source_url {
+                    facts.push(fact("OCI source", crate::knowledge::clean(url, 2048)));
+                }
                 ServiceAttribution {
                     kind: AttributionKind::DockerContainer,
                     name,
-                    description: Some(format!("Docker 容器 · {}", mapping.image)),
+                    description: mapping.description.clone(),
                     confidence: AttributionConfidence::Exact,
                     source: "本地 Docker Engine published port".to_string(),
                     facts,
@@ -293,6 +362,8 @@ fn protocol_name(protocol: Protocol) -> &'static str {
     }
 }
 
+const INSPECT_TEMPLATE: &str = r#"{"Id":{{json .Id}},"Name":{{json .Name}},"Config":{"Image":{{json .Config.Image}},"WorkingDir":{{json .Config.WorkingDir}},"Labels":{"com.docker.compose.project":{{json (index .Config.Labels "com.docker.compose.project")}},"com.docker.compose.service":{{json (index .Config.Labels "com.docker.compose.service")}},"com.docker.compose.project.working_dir":{{json (index .Config.Labels "com.docker.compose.project.working_dir")}},"com.docker.compose.project.config_files":{{json (index .Config.Labels "com.docker.compose.project.config_files")}},"org.opencontainers.image.description":{{json (index .Config.Labels "org.opencontainers.image.description")}},"org.opencontainers.image.source":{{json (index .Config.Labels "org.opencontainers.image.source")}}}},"NetworkSettings":{"Ports":{{json .NetworkSettings.Ports}}},"Mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}{"Source":{{json $m.Source}},"Destination":{{json $m.Destination}}}{{end}}]}"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,6 +385,7 @@ mod tests {
             process_status: ProcessStatus::Partial,
             process_status_message: None,
             service_manager: Default::default(),
+            service_profile_ids: Vec::new(),
             attributions: Vec::new(),
         }
     }

@@ -7,6 +7,9 @@ Type=simple
 User=portviewer
 Group=portviewer
 WorkingDirectory=/opt/portviewer
+CacheDirectory=portviewer
+CacheDirectoryMode=0700
+Environment=PORTVIEWER_KNOWLEDGE_DIR=/var/cache/portviewer/knowledge
 ExecStart=/opt/portviewer/portviewer-web --listen 127.0.0.1:17890 --assets /opt/portviewer/web-assets
 Restart=on-failure
 RestartSec=3

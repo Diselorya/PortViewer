@@ -39,7 +39,7 @@ describe("PortTable states", () => {
 
     expect(store.notification).toEqual({
       type: "error",
-      text: "复制诊断信息失败：NotAllowedError",
+      text: "复制失败: NotAllowedError",
     });
   });
 

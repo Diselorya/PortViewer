@@ -60,6 +60,12 @@ function staticChecks() {
   assert(baseUnit.get("User"), "the default service must select a user");
   assert.notEqual(baseUnit.get("User"), "root", "root attribution is opt-in");
   assert.match(baseUnit.get("ExecStart"), /--listen 127\.0\.0\.1:/);
+  assert.equal(baseUnit.get("CacheDirectory"), "portviewer");
+  assert.equal(baseUnit.get("CacheDirectoryMode"), "0700");
+  assert.equal(
+    baseUnit.get("Environment"),
+    "PORTVIEWER_KNOWLEDGE_DIR=/var/cache/portviewer/knowledge",
+  );
   assert.equal(fullDropIn.get("User"), "root");
   assert.equal(fullDropIn.get("Group"), "root");
   const hardened = new Map([...baseUnit, ...fullDropIn]);
@@ -264,6 +270,15 @@ async function startUnit(deployment, mode, overrides = new Map()) {
   const description = `PortViewer deployment regression ${mode}`;
   const settings = new Map([...baseUnit, ...overrides]);
   settings.set("WorkingDirectory", deployment.directory);
+  // Let systemd own and remove each test cache with its transient unit.
+  const knowledgeRuntime = unit.replace(/\.service$/, "");
+  settings.set("CacheDirectory", "");
+  settings.set("RuntimeDirectory", knowledgeRuntime);
+  settings.set("RuntimeDirectoryMode", "0700");
+  settings.set(
+    "Environment",
+    `PORTVIEWER_KNOWLEDGE_OFFLINE=1 PORTVIEWER_KNOWLEDGE_DIR=/run/${knowledgeRuntime}/knowledge`,
+  );
   const properties = [...settings]
     .filter(
       ([key]) => !["Type", "ExecStart", "Restart", "RestartSec"].includes(key),

@@ -19,6 +19,10 @@ import type {
 export const COLUMN_LABEL_KEYS: Partial<
   Record<PortColumnField, TranslationKey>
 > = {
+  service_name: "serviceName",
+  service_description: "serviceDescription",
+  local_host: "localHost",
+  remote_host: "remoteHost",
   protocol: "protocol",
   ip_version: "ipVersion",
   local_address: "localAddress",

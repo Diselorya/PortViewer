@@ -149,14 +149,24 @@ impl SystemSnapshot {
                 if depth > 0 {
                     facts.push(fact("关联方式", format!("端口进程的第 {depth} 级父进程")));
                 }
+                let declared_description = service_description(&service.name);
+                if declared_description.is_some() {
+                    facts.push(fact("简介来源", "Windows Service Description"));
+                }
+                let description = declared_description.or_else(|| {
+                    Some(
+                        if is_nssm {
+                            "NSSM 托管的 Windows 服务"
+                        } else {
+                            "Windows 服务"
+                        }
+                        .to_owned(),
+                    )
+                });
                 Some(ServiceAttribution {
                     kind,
                     name: service.display_name.clone(),
-                    description: Some(if is_nssm {
-                        "NSSM 托管的 Windows 服务".to_string()
-                    } else {
-                        "Windows 服务".to_string()
-                    }),
+                    description,
                     confidence: if depth == 0 && direct_service_count == 1 {
                         AttributionConfidence::Exact
                     } else {
@@ -271,7 +281,7 @@ fn query_command_line(handle: &ProcessHandle) -> Option<String> {
     }
     let value = unsafe { &*(storage.as_ptr().cast::<UNICODE_STRING>()) };
     let byte_length = value.Length as usize;
-    if byte_length == 0 || byte_length % 2 != 0 {
+    if byte_length == 0 || !byte_length.is_multiple_of(2) {
         return None;
     }
     let start = value.Buffer.0 as usize;
@@ -415,6 +425,105 @@ pub fn truncate(value: &str, max_chars: usize) -> String {
     } else {
         text
     }
+}
+
+fn service_description(name: &str) -> Option<String> {
+    use std::sync::{Mutex, OnceLock};
+    type DescriptionCache = HashMap<String, (u64, Option<String>)>;
+    static CACHE: OnceLock<Mutex<DescriptionCache>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let time = crate::knowledge::now();
+    if let Some((at, value)) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(name) {
+        if time.saturating_sub(*at) < 60 {
+            return value.clone();
+        }
+    }
+    let value = native_service_description(name);
+    let mut cache = cache.lock().unwrap_or_else(|p| p.into_inner());
+    if cache.len() >= 512 {
+        if let Some(old) = cache.keys().next().cloned() {
+            cache.remove(&old);
+        }
+    }
+    cache.insert(name.to_owned(), (time, value.clone()));
+    value
+}
+fn native_service_description(name: &str) -> Option<String> {
+    #[link(name = "Advapi32")]
+    extern "system" {
+        #[link_name = "OpenSCManagerW"]
+        fn open_manager(machine: *const u16, database: *const u16, access: u32) -> *mut c_void;
+        #[link_name = "OpenServiceW"]
+        fn open_service(manager: *mut c_void, name: *const u16, access: u32) -> *mut c_void;
+        #[link_name = "QueryServiceConfig2W"]
+        fn query_description(
+            service: *mut c_void,
+            level: u32,
+            buffer: *mut u8,
+            size: u32,
+            needed: *mut u32,
+        ) -> i32;
+        #[link_name = "CloseServiceHandle"]
+        fn close_service(handle: *mut c_void) -> i32;
+    }
+    if name.len() > 1024 || name.chars().any(char::is_control) {
+        return None;
+    }
+    let wide = name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let manager = unsafe { open_manager(std::ptr::null(), std::ptr::null(), 1) };
+    if manager.is_null() {
+        return None;
+    }
+    let service = unsafe { open_service(manager, wide.as_ptr(), 1) };
+    unsafe {
+        close_service(manager);
+    }
+    if service.is_null() {
+        return None;
+    }
+    let mut needed = 0;
+    unsafe {
+        query_description(service, 1, std::ptr::null_mut(), 0, &mut needed);
+    }
+    if needed < size_of::<usize>() as u32 || needed > 64 * 1024 {
+        unsafe {
+            close_service(service);
+        }
+        return None;
+    }
+    let mut storage = vec![0usize; (needed as usize).div_ceil(size_of::<usize>())];
+    let ok = unsafe {
+        query_description(
+            service,
+            1,
+            storage.as_mut_ptr().cast(),
+            (storage.len() * size_of::<usize>()) as u32,
+            &mut needed,
+        )
+    };
+    unsafe {
+        close_service(service);
+    }
+    if ok == 0 {
+        return None;
+    }
+    let pointer = unsafe { *(storage.as_ptr().cast::<*const u16>()) };
+    if pointer.is_null() {
+        return None;
+    }
+    let start = storage.as_ptr() as usize;
+    let end = start + storage.len() * size_of::<usize>();
+    let address = pointer as usize;
+    if address < start || address >= end || !address.is_multiple_of(2) {
+        return None;
+    }
+    let values = unsafe { std::slice::from_raw_parts(pointer, (end - address) / 2) };
+    let end = values.iter().position(|value| *value == 0)?;
+    let value = crate::knowledge::clean(&String::from_utf16_lossy(&values[..end]), 2048);
+    (!value.is_empty()).then_some(value)
 }
 
 #[cfg(test)]

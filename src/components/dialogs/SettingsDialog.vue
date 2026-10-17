@@ -7,10 +7,19 @@ import type {
   TableDensity,
   ThemeOption,
 } from "../../types/settings";
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useI18n } from "../../i18n";
 const store = useAppStore();
 const { t } = useI18n();
+watch(
+  () => store.settingsVisible,
+  (visible) => {
+    if (visible) void store.loadKnowledgeSettings();
+  },
+);
+const canConfigureKnowledge = computed(
+  () => Boolean(store.knowledgeSettings?.can_configure) && !store.knowledgeBusy,
+);
 const intervals = computed(() =>
   ([0, 1000, 2000, 5000, 10000, 30000, 60000] as const).map(
     (value) =>
@@ -22,6 +31,26 @@ const intervals = computed(() =>
 );
 function patch<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
   store.updateSettings({ [key]: value });
+}
+
+type KnowledgeToggle = "online_enabled" | "reverse_dns_enabled" | "ai_enabled";
+async function updateKnowledgeToggle(key: KnowledgeToggle, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const value = input.checked;
+  input.checked = Boolean(store.knowledgeSettings?.[key]);
+  if (
+    !canConfigureKnowledge.value ||
+    (key === "ai_enabled" && !store.knowledgeSettings?.ai_configured)
+  )
+    return;
+  try {
+    await store.updateKnowledgeSettings({ [key]: value });
+  } catch (error) {
+    store.notify(
+      "error",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 </script>
 <template>
@@ -129,6 +158,66 @@ function patch<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
           <option value="comfortable">{{ t("comfortable") }}</option>
         </select></label
       >
+    </div>
+    <div
+      class="settings-section knowledge-settings"
+      data-testid="knowledge-settings"
+    >
+      <h3>{{ t("knowledge") }}</h3>
+      <label
+        ><span
+          >{{ t("onlineEnrichment")
+          }}<small>{{ t("onlineEnrichmentHint") }}</small></span
+        ><input
+          type="checkbox"
+          :checked="store.knowledgeSettings?.online_enabled ?? true"
+          :disabled="!canConfigureKnowledge"
+          @change="updateKnowledgeToggle('online_enabled', $event)"
+      /></label>
+      <label
+        ><span
+          >{{ t("reverseDns")
+          }}<small>{{ t("reverseDnsSettingHint") }}</small></span
+        ><input
+          type="checkbox"
+          :checked="store.knowledgeSettings?.reverse_dns_enabled ?? true"
+          :disabled="!canConfigureKnowledge"
+          @change="updateKnowledgeToggle('reverse_dns_enabled', $event)"
+      /></label>
+      <label
+        ><span
+          >{{ t("optionalAi")
+          }}<small>{{
+            store.knowledgeSettings?.ai_configured
+              ? [
+                  store.knowledgeSettings.ai_provider,
+                  store.knowledgeSettings.ai_model,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : t("aiNotConfigured")
+          }}</small></span
+        ><input
+          type="checkbox"
+          :checked="store.knowledgeSettings?.ai_enabled ?? false"
+          :disabled="
+            !canConfigureKnowledge || !store.knowledgeSettings?.ai_configured
+          "
+          @change="updateKnowledgeToggle('ai_enabled', $event)"
+      /></label>
+      <div class="knowledge-config-note">
+        <p
+          v-if="
+            store.knowledgeSettings && !store.knowledgeSettings.can_configure
+          "
+        >
+          {{ t("remoteSettingsReadOnly") }}
+        </p>
+        <p v-if="!store.knowledgeSettings?.ai_configured">
+          {{ t("aiConfigurationHint") }}
+        </p>
+        <p v-if="store.knowledgeError">{{ store.knowledgeError }}</p>
+      </div>
     </div>
     <div class="privacy">
       <b>{{ t("privacy") }}</b

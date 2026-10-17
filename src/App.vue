@@ -1,18 +1,26 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import type { FacetField } from "./domain/portFacets";
 import AppHeader from "./components/layout/AppHeader.vue";
 import AppStatusBar from "./components/layout/AppStatusBar.vue";
 import ScanNotices from "./components/layout/ScanNotices.vue";
 import PortTableToolbar from "./components/port-table/PortTableToolbar.vue";
 import PortTable from "./components/port-table/PortTable.vue";
-import ProcessInspector from "./components/ProcessInspector.vue";
+import DetailDrawer from "./components/DetailDrawer.vue";
 import SettingsDialog from "./components/dialogs/SettingsDialog.vue";
 import ConfirmKillDialog from "./components/dialogs/ConfirmKillDialog.vue";
 import AboutDialog from "./components/dialogs/AboutDialog.vue";
 import { useAppStore } from "./stores/app";
 import { useI18n } from "./i18n";
+const toolbarRef = ref<{ openFilter: (field: FacetField) => void } | null>(
+  null,
+);
 const store = useAppStore(),
-  headerRef = ref<{ focusSearch: () => void } | null>(null);
+  headerRef = ref<{ focusSearch: () => void } | null>(null),
+  tableRef = ref<{
+    autoFitColumns: () => void;
+    setGroupsExpanded: (expanded: boolean) => void;
+  } | null>(null);
 const { locale, t } = useI18n();
 function applyTheme() {
   const dark =
@@ -23,6 +31,11 @@ function applyTheme() {
   document.documentElement.dataset.density = store.settings.density;
 }
 function shortcuts(e: KeyboardEvent) {
+  if (e.defaultPrevented) return;
+  if (store.selectedDetail) {
+    if (e.key === "Escape") store.closeDetail();
+    return;
+  }
   const target = e.target as HTMLElement;
   const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
   if (
@@ -64,15 +77,23 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="app-shell">
-    <AppHeader ref="headerRef" /><PortTableToolbar />
+    <AppHeader ref="headerRef" /><PortTableToolbar
+      ref="toolbarRef"
+      @auto-fit="tableRef?.autoFitColumns()"
+      @group-expansion="tableRef?.setGroupsExpanded($event)"
+    />
     <div v-if="store.webReadOnly" class="banner info" role="status">
       {{ t("webReadOnly") }}
     </div>
     <main class="workspace">
-      <section class="table-pane"><PortTable /></section>
-      <ProcessInspector v-if="store.selectedEntry" />
+      <section class="table-pane">
+        <PortTable
+          ref="tableRef"
+          @filter-field="toolbarRef?.openFilter($event)"
+        />
+      </section>
     </main>
-    <ScanNotices /><AppStatusBar /><SettingsDialog /><ConfirmKillDialog /><AboutDialog />
+    <DetailDrawer /><ScanNotices /><AppStatusBar /><SettingsDialog /><ConfirmKillDialog /><AboutDialog />
     <div
       v-if="store.notification"
       class="notice"

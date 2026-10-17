@@ -415,6 +415,9 @@ struct Container {
     compose_dir: Option<String>,
     compose_files: Option<String>,
     description: Option<String>,
+    source_url: Option<String>,
+    title: Option<String>,
+    version: Option<String>,
     mounts: Vec<Mount>,
 }
 
@@ -439,7 +442,7 @@ pub struct Docker {
 
 // Project environments, raw commands, unrelated labels and volume driver
 // options can contain secrets; they are excluded at the Docker CLI boundary.
-const INSPECT_TEMPLATE: &str = r#"{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"ports":{{json .NetworkSettings.Ports}},"working_dir":{{json .Config.WorkingDir}},"compose_project":{{json (index .Config.Labels "com.docker.compose.project")}},"compose_service":{{json (index .Config.Labels "com.docker.compose.service")}},"compose_dir":{{json (index .Config.Labels "com.docker.compose.project.working_dir")}},"compose_files":{{json (index .Config.Labels "com.docker.compose.project.config_files")}},"description":{{json (index .Config.Labels "org.opencontainers.image.description")}},"mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}{"source":{{json $m.Source}},"target":{{json $m.Destination}}}{{end}}]}"#;
+const INSPECT_TEMPLATE: &str = r#"{"id":{{json .Id}},"name":{{json .Name}},"image":{{json .Config.Image}},"ports":{{json .NetworkSettings.Ports}},"working_dir":{{json .Config.WorkingDir}},"compose_project":{{json (index .Config.Labels "com.docker.compose.project")}},"compose_service":{{json (index .Config.Labels "com.docker.compose.service")}},"compose_dir":{{json (index .Config.Labels "com.docker.compose.project.working_dir")}},"compose_files":{{json (index .Config.Labels "com.docker.compose.project.config_files")}},"description":{{json (index .Config.Labels "org.opencontainers.image.description")}},"source_url":{{json (index .Config.Labels "org.opencontainers.image.source")}},"title":{{json (index .Config.Labels "org.opencontainers.image.title")}},"version":{{json (index .Config.Labels "org.opencontainers.image.version")}},"mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}{"source":{{json $m.Source}},"target":{{json $m.Destination}}}{{end}}]}"#;
 
 impl Docker {
     pub fn collect() -> Self {
@@ -619,6 +622,15 @@ impl Docker {
                 facts.push(fact("挂载", format!("{} → {}", mount.source, mount.target)));
                 if !mount.source.is_empty() {
                     facts.push(fact("宿主路径", &mount.source));
+                }
+            }
+            for (label, value) in [
+                ("OCI source", &container.source_url),
+                ("OCI title", &container.title),
+                ("OCI version", &container.version),
+            ] {
+                if let Some(value) = value.as_deref().filter(|v| !v.is_empty()) {
+                    facts.push(fact(label, value));
                 }
             }
             let description = container
@@ -1123,6 +1135,9 @@ fn python_project(text: &[u8], path: &Path) -> Option<Project> {
 
 fn project_from(process: &Process, node: bool, entry: Option<&str>) -> Option<Project> {
     let mut starts = Vec::new();
+    if let Some(cwd) = &process.cwd {
+        starts.push(cwd.clone());
+    }
     if let Some(entry) = entry {
         let path = resolve_path(entry, process.cwd.as_deref());
         // With an unreadable cwd, a relative argv path has no trustworthy root;
@@ -1132,9 +1147,6 @@ fn project_from(process: &Process, node: bool, entry: Option<&str>) -> Option<Pr
                 starts.push(parent.to_path_buf());
             }
         }
-    }
-    if let Some(cwd) = &process.cwd {
-        starts.push(cwd.clone());
     }
     let filename = if node {
         "package.json"
@@ -1495,6 +1507,7 @@ fn entry_arg(args: &[String], node: bool) -> Option<&str> {
 
 pub fn runtime(process: &Process) -> Option<Attribution> {
     let node = runtime_name(process)?;
+    let launcher = crate::knowledge::local::launcher(&process.args, !node);
     let entry = entry_arg(&process.args, node);
     let project = project_from(process, node, entry);
     let module = if node {
@@ -1503,6 +1516,9 @@ pub fn runtime(process: &Process) -> Option<Attribution> {
         python_module(&process.args)
     };
     let mut facts = Vec::new();
+    if let Some(launcher) = launcher {
+        facts.push(fact("公开软件", launcher));
+    }
     if let Some(cwd) = &process.cwd {
         facts.push(fact("工作目录", cwd.to_string_lossy()));
     }

@@ -55,3 +55,9 @@ fn init_logging() {
         .compact()
         .try_init();
 }
+
+#[cfg(windows)]
+pub use portviewer_lib::knowledge;
+#[cfg(not(windows))]
+#[path = "../../src-tauri/src/knowledge/mod.rs"]
+pub mod knowledge;

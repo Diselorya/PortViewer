@@ -143,6 +143,8 @@ curl http://127.0.0.1:17890/api/health
 curl http://127.0.0.1:17890/api/v1/scan
 ```
 
+模板通过 `CacheDirectory=portviewer` 提供 `/var/cache/portviewer/knowledge` 作为资料缓存与偏好目录，权限为 0700；其他目录仍按原沙箱限制访问。联网与可选 AI 配置见[服务资料指南](service-knowledge.md)。
+
 服务单元必须保留 `RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK`；Linux 网络枚举需要 `AF_NETLINK`。只有 health 正常不能说明扫描正常，部署后必须检查 `/api/v1/scan`。
 
 普通账号模式是默认配置：端口占用仍可查询，但其他账号的 `/proc/<pid>/fd`、命令行、工作目录以及 Docker socket 常不可读。在 Ubuntu 反馈环境中，监听端口的进程归因率不足 1%。界面会显示归因受限和未知归属，不把无法取得 PID 的端点当成系统进程。端口扫描完整与服务归因完整分别报告。

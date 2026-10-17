@@ -1,6 +1,7 @@
 mod attribution;
 mod commands;
 mod error;
+pub mod knowledge;
 mod network;
 mod process;
 pub mod service_manager;
@@ -13,6 +14,10 @@ use std::sync::Arc;
 
 use commands::build_identity::get_build_identity;
 use commands::kill_process::kill_process;
+use commands::knowledge::{
+    get_host_context, get_knowledge_settings, get_service_profiles, open_external_url,
+    set_knowledge_settings,
+};
 use commands::privilege::{get_privilege_status, restart_elevated};
 use commands::save_export::save_export;
 use commands::scan_ports::{enrich_ports, scan_all_ports};
@@ -66,6 +71,11 @@ pub fn run() {
         .manage(BackendState::new())
         .invoke_handler(tauri::generate_handler![
             get_build_identity,
+            get_service_profiles,
+            get_host_context,
+            get_knowledge_settings,
+            set_knowledge_settings,
+            open_external_url,
             scan_all_ports,
             enrich_ports,
             kill_process,

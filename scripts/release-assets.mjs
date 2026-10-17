@@ -381,6 +381,14 @@ export function readTarEntries(compressed) {
 }
 
 export function validateWebArchive(entries, version, linux = false) {
+  const [major, minor] = parseVersion(version).split(".").map(Number);
+  if (major > 1 || (major === 1 && minor >= 3)) {
+    const guide = entries.get("docs/service-knowledge.md");
+    assert(
+      guide && !guide.directory && guide.contents.length > 0,
+      "部署包缺少 docs/service-knowledge.md",
+    );
+  }
   for (const name of [
     "README.md",
     "README.zh-CN.md",

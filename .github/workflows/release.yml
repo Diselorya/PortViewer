@@ -52,7 +52,10 @@ jobs:
     name: Windows artifacts
     needs: gate
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      PORTVIEWER_KNOWLEDGE_OFFLINE: "1"
+      PORTVIEWER_KNOWLEDGE_DIR: ${{ github.workspace }}/.tmp/knowledge-ci
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -68,7 +71,22 @@ jobs:
       - run: npm run test:lan-interfaces
       - run: cargo build --release --manifest-path web-service/Cargo.toml
       - run: npm run build:installer:online
-      - run: npm run build:installer:offline
+      - name: Build offline installer with bounded download recovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            & npm.cmd run build:installer:offline 2>&1 | Tee-Object -FilePath offline-installer-build.log
+            $buildExitCode = $LASTEXITCODE
+            if ($buildExitCode -eq 0) { exit 0 }
+            $buildOutput = Get-Content -LiteralPath offline-installer-build.log -Raw
+            $networkFailure = $buildOutput -match '(?i)Peer disconnected|connection (?:reset|aborted|closed)|timed? out|TLS handshake|error sending request|HTTP (?:status )?50[234]'
+            if (-not $networkFailure -or $attempt -eq 3) { exit $buildExitCode }
+            Write-Host "Transient installer download failure; retry $($attempt + 1)/3."
+            Start-Sleep -Seconds (5 * $attempt)
+          }
+          exit 1
       - name: Package artifacts
         shell: pwsh
         run: |
@@ -76,7 +94,7 @@ jobs:
           Copy-Item web-service/target/release/portviewer-web.exe release/
           Copy-Item dist/* release/web-assets/ -Recurse
           Copy-Item README.md,README.zh-CN.md,LICENSE,SECURITY.md release/
-          Copy-Item docs/webgui-deployment.md,docs/lan-port-api.md,docs/installation.md release/docs/
+          Copy-Item docs/webgui-deployment.md,docs/lan-port-api.md,docs/installation.md,docs/service-knowledge.md release/docs/
           Copy-Item docs/api/portviewer-lan.openapi.yaml release/docs/api/
           Compress-Archive -Path release/* -DestinationPath PortViewer-WebGUI-windows-x64.zip
           $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -109,6 +127,9 @@ jobs:
     needs: gate
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      PORTVIEWER_KNOWLEDGE_OFFLINE: "1"
+      PORTVIEWER_KNOWLEDGE_DIR: ${{ github.workspace }}/.tmp/knowledge-ci
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -128,7 +149,7 @@ jobs:
           cp web-service/target/release/portviewer-web package/
           cp -R dist/. package/web-assets/
           cp README.md README.zh-CN.md LICENSE SECURITY.md package/
-          cp docs/webgui-deployment.md docs/lan-port-api.md package/docs/
+          cp docs/webgui-deployment.md docs/lan-port-api.md docs/service-knowledge.md package/docs/
           cp docs/api/portviewer-lan.openapi.yaml package/docs/api/
           cp deploy/linux/portviewer-web.service deploy/linux/portviewer-web-full-attribution.conf package/deploy/linux/
           cp deploy/linux/start.sh package/start.sh

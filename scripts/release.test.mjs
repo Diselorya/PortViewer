@@ -562,6 +562,21 @@ test("should detect tampered frontend assets, missing documentation and non-exec
   assert.throws(() => validateWebArchive(permissions, "1.2.0", true), /0755/);
 });
 
+test("should require the service knowledge guide from v1.3 while retaining v1.2 recovery", () => {
+  for (const linux of [false, true]) {
+    const files = webFiles("1.3.0", linux);
+    assert.doesNotThrow(() => validateWebArchive(files, "1.3.0", linux));
+    files.delete("docs/service-knowledge.md");
+    assert.throws(
+      () => validateWebArchive(files, "1.3.0", linux),
+      /service-knowledge/,
+    );
+    const previous = webFiles("1.2.0", linux);
+    previous.delete("docs/service-knowledge.md");
+    assert.doesNotThrow(() => validateWebArchive(previous, "1.2.0", linux));
+  }
+});
+
 test("should validate all package hashes, API digests and installer product versions", async (t) => {
   const fixture = await assetDirectory(t);
   const result = await validateLocalAssets(fixture.directory, {

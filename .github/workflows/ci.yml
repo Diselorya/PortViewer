@@ -15,7 +15,10 @@ jobs:
   verify:
     name: Windows / Node and Rust
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      PORTVIEWER_KNOWLEDGE_OFFLINE: "1"
+      PORTVIEWER_KNOWLEDGE_DIR: ${{ github.workspace }}/.tmp/knowledge-ci
 
     steps:
       - name: Checkout
@@ -118,6 +121,9 @@ jobs:
     name: Linux / WebGUI
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      PORTVIEWER_KNOWLEDGE_OFFLINE: "1"
+      PORTVIEWER_KNOWLEDGE_DIR: ${{ github.workspace }}/.tmp/knowledge-ci
 
     steps:
       - name: Checkout

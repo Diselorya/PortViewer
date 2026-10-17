@@ -39,13 +39,15 @@ v1 不做抓包、协议解析、流量统计、防火墙管理、恶意进程�
 从源码开发还需要：
 
 - Node.js 22 与 npm；
-- Rust stable，目标工具链为 `x86_64-pc-windows-msvc`；
+- Rust stable 1.95+，目标工具链为 `x86_64-pc-windows-msvc`；
 - Visual Studio 2022 Build Tools，并安装“使用 C++ 的桌面开发”和 Windows SDK；
 - WebView2 开发环境。
 
 ## 开发与验证
 
 维护者可运行 `npm run release -- --check` 检查发布条件，再用 `npm run release` 一次完成 CI 门禁、GitHub Release、已配置远端同步及本地安装包更新。发行包必须通过版本与 SHA-256 校验；远端映射和中断恢复见[发布指南](docs/releasing.md)。
+
+服务中文名、资料来源、默认自动联网、可选 AI 和紧凑视图操作见[服务资料指南](docs/service-knowledge.md)。
 
 ### 启动 WebGUI
 

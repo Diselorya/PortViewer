@@ -12,6 +12,9 @@ const excludedDirectories = new Set([
   "node_modules",
   "release",
   "target",
+  "test-results",
+  "playwright-report",
+  "blob-report",
   "tmp",
 ]);
 const excludedRelativeDirectories = new Set(["src-tauri/gen/schemas"]);

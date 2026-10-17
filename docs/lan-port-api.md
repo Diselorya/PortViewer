@@ -32,7 +32,7 @@ export PORTVIEWER_API_TOKEN="$(openssl rand -hex 32)"
 ./web-service/target/release/portviewer-web serve --api-only --listen 0.0.0.0:17890
 ```
 
-不带 `--api-only` 时同时加载本机 WebGUI；局域网客户端仍只能访问 health 与端口 API。通过主机名而不是私有 IP 访问时，服务端还需配置：
+不带 `--api-only` 时同时加载本机 WebGUI；局域网客户端仍只能访问 health、端口 API，以及经过 Bearer Token 鉴权的服务资料 API。通过主机名而不是私有 IP 访问时，服务端还需配置：
 
 ```text
 PORTVIEWER_ALLOWED_HOSTS=ports.internal,devbox.lan
@@ -162,3 +162,16 @@ npm run test:lan-interfaces
 ```
 
 该 E2E 会启动真实 API 和 TCP listener，验证匿名数据最小化、Token 详情、错误 Token、Host 防护、空闲端口 bind、CLI 输出，以及 MCP initialize/tools/list/tools/call 全链路。
+
+## 服务资料与主机详情（1.3）
+
+高级端口结果中的可选 `service_profile_ids` 可查询服务中文名、真实本机简介、软件说明、来源、候选和缓存状态。所有知识接口在局域网都要求已配置且有效的 Bearer Token；本机 WebGUI 仍要求安全 Host / 同源 Origin。知识接口不接受客户端路径、命令行或任意 URL。
+
+- `POST /api/v1/knowledge/profiles`：JSON `{"profile_ids":["catalog:nginx"],"refresh":false}`。也可显式提供结构化公开 `public_ids`（github/npm/pypi）；这些结果不会自动绑定某个 PID。
+- `GET /api/v1/knowledge/host?address=127.0.0.1`：数字 IP 的主机上下文；省略 address 返回扫描服务端本机。对端只做有界反向 DNS，名称不是验证过的机器身份。
+- `GET /api/v1/knowledge/settings`：返回开关、AI 是否已配置和 `can_configure`，不返回端点或密钥。
+- `PUT /api/v1/knowledge/settings`：仅本机同源界面，JSON `{"online_enabled":true,"ai_enabled":false,"reverse_dns_enabled":true}`；局域网即使 Token 有效也不能更改。
+
+本机地址来自最近一次完整成功扫描的当前 socket 地址集合；部分失败保留上一份有效快照，地址集合变化会使相关主机缓存失效。它不是完整网卡清单，通配监听地址不能当作某台机器的实际地址。
+
+资料与 DNS 均异步补充；请求立即返回缓存或 queued，不阻塞端口扫描。每批最多 128 个资料 ID。默认自动查询已确认的公开软件坐标，未知私有项目保持本机资料。联网来源只说明软件用途，不能提高 PID 归属可信度。`summary` 是本机项目用途，`software_summary` 是软件说明。详细设置与环境变量见 [服务知识补充](service-knowledge.md)。

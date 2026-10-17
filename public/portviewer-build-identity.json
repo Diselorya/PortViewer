@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "productId": "com.portviewer.desktop",
-  "productVersion": "1.2.0",
+  "productVersion": "1.3.0",
   "frontendContractVersion": 1,
-  "sourceHash": "26555f97249266c2bf8b10bce316959b8ed6d4ffac42e89b6eb2d4b36c21ed2a"
+  "sourceHash": "d2389f44b6c2cd236bd02e002effb0e8def6ff24ce243a79bbd3d2ce4d3b710b"
 }

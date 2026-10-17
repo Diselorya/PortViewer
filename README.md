@@ -52,7 +52,7 @@ Requirements: Windows 10/11 x64 with the [Microsoft Edge WebView2 Runtime](https
 
 ## Build from source
 
-Prerequisites: Node.js 22 + npm, Rust stable (`x86_64-pc-windows-msvc`), Visual Studio 2022 Build Tools with "Desktop development with C++" and the Windows SDK.
+Prerequisites: Node.js 22 + npm, Rust stable 1.95+ (`x86_64-pc-windows-msvc`), Visual Studio 2022 Build Tools with "Desktop development with C++" and the Windows SDK.
 
 ```powershell
 git clone https://github.com/Diselorya/PortViewer.git
@@ -71,6 +71,8 @@ npm run build:installer:offline
 ```
 
 Release maintainers can run `npm run release -- --check` followed by `npm run release` to publish a CI-verified version, synchronize configured remotes and refresh local installers with version/SHA-256 verification. See the [release guide](docs/releasing.md) for remote mappings and recovery.
+
+Service names, sources, automatic public metadata, optional AI and the compact view controls are explained in the [service knowledge guide](docs/service-knowledge.md).
 
 WebGUI (Windows/Linux, read-only):
 

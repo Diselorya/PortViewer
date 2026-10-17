@@ -7,7 +7,8 @@ const store = useAppStore(),
   { locale, t } = useI18n(),
   expanded = ref(false);
 const notices = computed(() => {
-  const result: Array<{ kind: "warning" | "danger"; text: string }> = [];
+  const result: Array<{ kind: "warning" | "danger" | "info"; text: string }> =
+    [];
   if (store.settingsRecovered)
     result.push({ kind: "warning", text: t("settingsRecovered") });
   if (store.scanError)
@@ -40,6 +41,33 @@ const notices = computed(() => {
         store.permissionLimitedCount > 0
           ? t("permissionLimited", { count: store.permissionLimitedCount })
           : t("attributionPermissionLimited"),
+    });
+  if (store.knowledgeError)
+    result.push({
+      kind: "warning",
+      text: t("knowledgeError") + ": " + store.knowledgeError,
+    });
+  const profileFailures = { offline: 0, rate_limited: 0, error: 0 };
+  for (const profile of store.serviceProfiles.values()) {
+    const status = profile.enrichment_status;
+    if (status === "offline" || status === "rate_limited" || status === "error")
+      profileFailures[status]++;
+  }
+  for (const [status, label] of [
+    ["offline", "knowledgeOffline"],
+    ["rate_limited", "knowledgeRateLimited"],
+    ["error", "knowledgeError"],
+  ] as const) {
+    if (profileFailures[status])
+      result.push({
+        kind: "warning",
+        text: t(label) + " · " + profileFailures[status],
+      });
+  }
+  if (store.knowledgePending > 0)
+    result.push({
+      kind: "info",
+      text: t("knowledgeQueued") + " · " + store.knowledgePending,
     });
   return result;
 });
@@ -90,7 +118,7 @@ async function requestElevation() {
   <section
     class="scan-notices"
     data-testid="scan-notices"
-    :class="{ 'has-notices': notices.length }"
+    :class="{ 'has-notices': notices.some((notice) => notice.kind !== 'info') }"
     :aria-label="t('scanNotices')"
     @keydown.esc="expanded = false"
   >

@@ -19,13 +19,14 @@ test("页面加载并渲染本机扫描结果", async ({ page }) => {
 test("搜索过滤后仅保留匹配端口", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("searchbox").fill(SELF_PORT);
-  const rows = page.locator("tbody tr");
-  await expect(rows.first()).toBeVisible({ timeout: 30_000 });
-  const count = await rows.count();
-  expect(count).toBeGreaterThan(0);
-  for (let i = 0; i < count; i += 1) {
-    await expect(rows.nth(i)).toContainText(SELF_PORT);
-  }
+  // Loading renders an empty-message row before the real scan response arrives.
+  const rows = page.locator("tbody tr").filter({
+    has: page.locator("td[data-column-field]"),
+  });
+  await expect(rows.filter({ hasText: SELF_PORT }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(rows.filter({ hasNotText: SELF_PORT })).toHaveCount(0);
 });
 
 test("点击端口行打开详情面板并显示服务进程", async ({ page }) => {

@@ -13,12 +13,21 @@ export function isWebRuntime(): boolean {
   return !isTauriRuntime() && import.meta.env.MODE !== "test";
 }
 
-async function api<T>(path: string): Promise<T> {
+async function api<T>(
+  path: string,
+  method = "GET",
+  payload?: unknown,
+): Promise<T> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 30_000);
   try {
     const response = await fetch(new URL(path, document.baseURI).href, {
-      method: "GET",
+      method,
+      headers:
+        payload === undefined
+          ? undefined
+          : { "Content-Type": "application/json" },
+      body: payload === undefined ? undefined : JSON.stringify(payload),
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
@@ -65,6 +74,20 @@ export async function invokeWeb<T>(
   args?: InvokeArgs,
 ): Promise<T> {
   switch (command) {
+    case "get_service_profiles":
+      return api<T>("api/v1/knowledge/profiles", "POST", {
+        profile_ids: args?.profileIds,
+        public_ids: args?.publicIds,
+        refresh: args?.refresh === true,
+      });
+    case "get_host_context":
+      return api<T>(
+        `api/v1/knowledge/host${typeof args?.address === "string" ? `?address=${encodeURIComponent(args.address)}` : ""}`,
+      );
+    case "get_knowledge_settings":
+      return api<T>("api/v1/knowledge/settings");
+    case "set_knowledge_settings":
+      return api<T>("api/v1/knowledge/settings", "PUT", args?.settings);
     case "get_build_identity":
       return api<T>("api/v1/build-identity");
     case "scan_all_ports":
@@ -98,4 +121,28 @@ export async function invoke<T>(
   return args === undefined
     ? tauriInvoke<T>(command)
     : tauriInvoke<T>(command, args);
+}
+
+/** Open only validated web URLs; the native handler repeats the validation. */
+export async function openExternalUrl(value: string): Promise<void> {
+  if (value.length > 2048 || [...value].some((char) => char.charCodeAt(0) < 32))
+    throw new Error("链接无效");
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("链接无效");
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    !url.hostname
+  )
+    throw new Error("仅支持无凭据的 HTTP/HTTPS 链接");
+  if (isWebRuntime()) {
+    window.open(url.href, "_blank", "noopener,noreferrer");
+    return;
+  }
+  await invoke("open_external_url", { url: url.href });
 }

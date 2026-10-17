@@ -317,6 +317,7 @@ mod tests {
             process_status: ProcessStatus::System,
             process_status_message: None,
             service_manager: Default::default(),
+            service_profile_ids: Vec::new(),
             attributions: Vec::new(),
         }
     }

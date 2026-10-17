@@ -1,8 +1,12 @@
 import { SERVICE_MANAGERS, serviceManager } from "./attribution";
 import { analyzeConnection } from "./connectionRelation";
 import type { PortEntry } from "../types/port";
+import { displayField, type EntryDisplayResolver } from "./serviceKnowledge";
 
 export const FACET_FIELDS = [
+  "service_name",
+  "local_host",
+  "remote_host",
   "protocol",
   "ip_version",
   "local_address",
@@ -88,8 +92,16 @@ export function hasRemoteEndpoint(entry: PortEntry): boolean {
   );
 }
 
-export function facetValues(entry: PortEntry, field: FacetField): string[] {
+export function facetValues(
+  entry: PortEntry,
+  field: FacetField,
+  displayFor?: EntryDisplayResolver,
+): string[] {
   switch (field) {
+    case "service_name":
+    case "local_host":
+    case "remote_host":
+      return [displayField(entry, field, displayFor) || UNIDENTIFIED];
     case "role":
       return [analyzeConnection(entry).role];
     case "service_manager":
@@ -134,6 +146,7 @@ export function facetOptions(
   entries: PortEntry[],
   field: FacetField,
   selected: string[] = [],
+  displayFor?: EntryDisplayResolver,
 ): FacetOption[] {
   const counts = new Map<string, number>(
     [...(STABLE_FACET_VALUES[field] ?? []), ...selected].map((value) => [
@@ -142,7 +155,7 @@ export function facetOptions(
     ]),
   );
   for (const entry of entries)
-    for (const value of facetValues(entry, field))
+    for (const value of facetValues(entry, field, displayFor))
       counts.set(value, (counts.get(value) ?? 0) + 1);
   return [...counts]
     .sort(([a], [b]) => compareFacetValues(a, b))
@@ -152,19 +165,26 @@ export function facetOptions(
 export function matchesFacetFilters(
   entry: PortEntry,
   filters: FacetFilters,
+  displayFor?: EntryDisplayResolver,
 ): boolean {
   return FACET_FIELDS.every((field) => {
     const selected = filters[field];
     return (
       !selected?.length ||
-      facetValues(entry, field).some((value) => selected.includes(value))
+      facetValues(entry, field, displayFor).some((value) =>
+        selected.includes(value),
+      )
     );
   });
 }
 
 /** Multi-valued evidence forms one set-valued group so endpoints never duplicate. */
-export function facetGroupKey(entry: PortEntry, field: FacetField): string {
-  return JSON.stringify(facetValues(entry, field));
+export function facetGroupKey(
+  entry: PortEntry,
+  field: FacetField,
+  displayFor?: EntryDisplayResolver,
+): string {
+  return JSON.stringify(facetValues(entry, field, displayFor));
 }
 
 export interface EntryGroup {
@@ -176,10 +196,12 @@ export interface EntryGroup {
 export function groupEntries(
   entries: PortEntry[],
   field: FacetField,
+  displayFor?: EntryDisplayResolver,
+  order: 1 | -1 = 1,
 ): EntryGroup[] {
   const groups = new Map<string, EntryGroup>();
   for (const entry of entries) {
-    const values = facetValues(entry, field),
+    const values = facetValues(entry, field, displayFor),
       key = JSON.stringify(values);
     let group = groups.get(key);
     if (!group) {
@@ -188,7 +210,8 @@ export function groupEntries(
     }
     group.entries.push(entry);
   }
-  return [...groups.values()].sort((a, b) =>
-    compareFacetValues(a.values.join(" + "), b.values.join(" + ")),
+  return [...groups.values()].sort(
+    (a, b) =>
+      order * compareFacetValues(a.values.join(" + "), b.values.join(" + ")),
   );
 }

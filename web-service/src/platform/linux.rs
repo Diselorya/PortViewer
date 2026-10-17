@@ -47,6 +47,7 @@ struct Entry {
     process_status_message: Option<String>,
     service_manager: ServiceManager,
     attributions: Vec<Attribution>,
+    service_profile_ids: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -183,6 +184,7 @@ fn scan_internal(advanced: bool) -> Result<serde_json::Value, String> {
                     None
                 },
                 service_manager: ServiceManager::Unknown,
+                service_profile_ids: Vec::new(),
                 attributions: Vec::new(),
             });
         }
@@ -351,6 +353,15 @@ fn scan_internal(advanced: bool) -> Result<serde_json::Value, String> {
             message: Some("基础扫描仅枚举端口与进程；详细扫描再解析容器、服务和项目".to_owned()),
             elevation_may_help: false,
         });
+    }
+    crate::knowledge::observe_scan(
+        entries.iter().map(|entry| entry.local_address.as_str()),
+        true,
+    );
+    for entry in &mut entries {
+        if let Ok(value) = serde_json::to_value(&*entry) {
+            entry.service_profile_ids = crate::knowledge::register_port(&value);
+        }
     }
     let total_count = entries.len();
     to_value(ScanResult {

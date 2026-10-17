@@ -12,6 +12,7 @@ import {
   type FacetField,
 } from "./portFacets";
 import type { PortColumnField, PortEntry, SortSpec } from "../types/port";
+import { displayField, type EntryDisplayResolver } from "./serviceKnowledge";
 export type QueryField =
   | "port"
   | "pid"
@@ -59,15 +60,21 @@ export function parseQuery(query: string): QueryToken[] {
       return { field: "text", value: raw.toLowerCase() };
     });
 }
-function matches(e: PortEntry, t: QueryToken) {
+function matches(
+  e: PortEntry,
+  t: QueryToken,
+  displayFor?: EntryDisplayResolver,
+) {
+  const display = displayFor?.(e);
   const lp = String(e.local_port),
     rp = e.remote_port === null ? "" : String(e.remote_port),
     pid = String(e.pid),
     name = (e.process_name ?? "").toLowerCase(),
     path = (e.process_path ?? "").toLowerCase(),
     attribution =
-      `${attributionSearchText(e)} ${serviceManager(e)} ${serviceManagerLabel(serviceManager(e))}`.toLowerCase(),
-    ips = `${e.local_address} ${e.remote_address ?? ""}`.toLowerCase(),
+      `${attributionSearchText(e)} ${serviceManager(e)} ${serviceManagerLabel(serviceManager(e))} ${display?.serviceName ?? ""} ${display?.serviceDescription ?? ""} ${display?.softwareSummary ?? ""}`.toLowerCase(),
+    ips =
+      `${e.local_address} ${e.remote_address ?? ""} ${display?.localHost ?? ""} ${display?.remoteHost ?? ""}`.toLowerCase(),
     state = (e.state ?? "").toLowerCase(),
     protocol = e.protocol.toLowerCase();
   switch (t.field) {
@@ -115,7 +122,13 @@ function compare(a: unknown, b: unknown) {
     ? a - b
     : sortCollator.compare(String(a ?? ""), String(b ?? ""));
 }
-function fieldValue(entry: PortEntry, field: PortColumnField): unknown {
+export function fieldValue(
+  entry: PortEntry,
+  field: PortColumnField,
+  displayFor?: EntryDisplayResolver,
+): unknown {
+  const displayValue = displayField(entry, field, displayFor);
+  if (displayValue !== undefined) return displayValue;
   if (field === "attribution") return attributionLabel(entry);
   if (field === "service_manager") return serviceManager(entry);
   if (field === "role") return analyzeConnection(entry).role;
@@ -126,7 +139,7 @@ function fieldValue(entry: PortEntry, field: PortColumnField): unknown {
     return null;
   if (field === "attribution_kind" || field === "attribution_confidence")
     return facetValues(entry, field).join(" + ");
-  return entry[field];
+  return (entry as unknown as Record<string, unknown>)[field];
 }
 export function queryEntries(
   entries: PortEntry[],
@@ -135,6 +148,7 @@ export function queryEntries(
   states: string[],
   sort: SortSpec[],
   facets: FacetFilters = {},
+  displayFor?: EntryDisplayResolver,
 ): PortEntry[] {
   const tokens = parseQuery(query),
     ps = new Set(protocols),
@@ -151,15 +165,15 @@ export function queryEntries(
         (!ss.size ||
           (e.protocol === "Tcp" && e.state !== null && ss.has(e.state))) &&
         facetSets.every(([field, values]) =>
-          facetValues(e, field).some((value) => values.has(value)),
+          facetValues(e, field, displayFor).some((value) => values.has(value)),
         ) &&
-        tokens.every((t) => matches(e, t)),
+        tokens.every((t) => matches(e, t, displayFor)),
     )
     .map((entry, index) => ({
       entry,
       index,
       rank: rank(entry, tokens),
-      sortValues: sort.map((spec) => fieldValue(entry, spec.field)),
+      sortValues: sort.map((spec) => fieldValue(entry, spec.field, displayFor)),
     }))
     .sort((a, b) => {
       if (!sort.length && a.rank !== b.rank) return b.rank - a.rank;

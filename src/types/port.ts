@@ -70,6 +70,8 @@ export interface PortEntry {
   attributions: ServiceAttribution[];
   /** Optional while reading snapshots from an older backend. */
   service_manager?: ServiceManager;
+  /** References registered by the scanner; never part of endpoint identity. */
+  service_profile_ids?: string[];
 }
 export interface ScanScope {
   protocol: Protocol;
@@ -108,8 +110,12 @@ export interface AttributionResult {
   duration_ms: number;
 }
 export type PortColumnField =
-  | Exclude<keyof PortEntry, "attributions">
+  | Exclude<keyof PortEntry, "attributions" | "service_profile_ids">
   | "attribution"
+  | "service_name"
+  | "service_description"
+  | "local_host"
+  | "remote_host"
   | "role"
   | "attribution_kind"
   | "attribution_confidence";

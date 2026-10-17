@@ -1,5 +1,8 @@
 import { execFile, spawn } from "node:child_process";
 import dgram from "node:dgram";
+import { randomBytes, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import os from "node:os";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
@@ -18,7 +21,19 @@ const binary =
     "debug",
     process.platform === "win32" ? "portviewer-web.exe" : "portviewer-web",
   );
-const token = "ci-portviewer-token-0123456789abcdef";
+const token = randomBytes(32).toString("hex");
+const knowledgeDirectory = path.join(
+  root,
+  ".tmp",
+  "knowledge-lan-" + randomUUID(),
+);
+const serviceEnvironment = {
+  ...process.env,
+  PORTVIEWER_API_TOKEN: token,
+  PORTVIEWER_KNOWLEDGE_DIR: knowledgeDirectory,
+  PORTVIEWER_KNOWLEDGE_OFFLINE: "1",
+  RUST_LOG: "warn",
+};
 const children = new Set();
 
 function assert(condition, message) {
@@ -102,10 +117,247 @@ async function requestWithHost(base, host) {
   });
 }
 
+async function verifyGuiBinaryVersion(expectedVersion) {
+  const expectedIdentity = JSON.parse(
+    await readFile(
+      path.join(root, "dist", "portviewer-build-identity.json"),
+      "utf8",
+    ),
+  );
+  const probe = net.createServer();
+  const port = await listen(probe);
+  await close(probe);
+  const base = "http://127.0.0.1:" + port;
+  const child = spawn(
+    binary,
+    [
+      "serve",
+      "--listen",
+      "127.0.0.1:" + port,
+      "--assets",
+      path.join(root, "dist"),
+    ],
+    {
+      cwd: root,
+      env: serviceEnvironment,
+      stdio: ["ignore", "ignore", "pipe"],
+      windowsHide: true,
+    },
+  );
+  children.add(child);
+  child.stderr.resume();
+  try {
+    await waitForHealth(base);
+    const identity = await fetchJson(base + "/api/v1/build-identity");
+    assert(
+      identity.response.ok && identity.body?.productVersion === expectedVersion,
+      "integration tests require the current-version binary and assets",
+    );
+    assert(
+      identity.body?.frontendSourceHash === expectedIdentity.sourceHash,
+      "integration tests require the same frontend source identity",
+    );
+  } finally {
+    if (child.exitCode === null) {
+      child.kill();
+      await Promise.race([
+        new Promise((resolve) => child.once("exit", resolve)),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+    }
+    children.delete(child);
+  }
+}
+
+function assignedPrivateAddress() {
+  return Object.values(os.networkInterfaces())
+    .flat()
+    .find((item) => {
+      if (!item || item.internal || item.family !== "IPv4") return false;
+      const parts = item.address.split(".").map(Number);
+      return (
+        parts[0] === 10 ||
+        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+        (parts[0] === 192 && parts[1] === 168)
+      );
+    })?.address;
+}
+async function privateRequest(base, address, pathname, options = {}) {
+  const url = new URL(base);
+  return new Promise((resolve, reject) => {
+    const payload =
+      options.body === undefined ? undefined : JSON.stringify(options.body);
+    const request = http.request(
+      {
+        hostname: address,
+        port: url.port,
+        localAddress: address,
+        path: pathname,
+        method: options.method ?? "GET",
+        headers: {
+          ...(payload === undefined
+            ? {}
+            : {
+                "Content-Type": "application/json",
+                "Content-Length": Buffer.byteLength(payload),
+              }),
+          ...options.headers,
+        },
+      },
+      (response) => {
+        let text = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          text += chunk;
+        });
+        response.on("end", () => {
+          try {
+            resolve({
+              status: response.statusCode,
+              body: text ? JSON.parse(text) : null,
+            });
+          } catch {
+            reject(new Error("LAN knowledge route returned invalid JSON"));
+          }
+        });
+      },
+    );
+    request.setTimeout(30000, () =>
+      request.destroy(new Error("LAN knowledge request timed out")),
+    );
+    request.once("error", reject);
+    request.end(payload);
+  });
+}
+async function checkKnowledgeAuthorization(base) {
+  const settings = {
+    online_enabled: false,
+    ai_enabled: false,
+    reverse_dns_enabled: false,
+  };
+  const local = await fetchJson(base + "/api/v1/knowledge/settings");
+  assert(
+    local.response.ok && local.body.can_configure === true,
+    "loopback may inspect knowledge configuration",
+  );
+  const saved = await fetchJson(base + "/api/v1/knowledge/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  assert(
+    saved.response.ok &&
+      saved.body.can_configure === true &&
+      saved.body.online_enabled === false,
+    "loopback may save knowledge settings",
+  );
+  const invalidBody = await fetchJson(base + "/api/v1/knowledge/profiles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entries: [], url: "http://127.0.0.1/" }),
+  });
+  assert(
+    invalidBody.response.status === 400,
+    "knowledge API must reject client-supplied local entries and URLs",
+  );
+  const invalidAddress = await fetchJson(
+    base + "/api/v1/knowledge/host?address=example.com",
+  );
+  assert(
+    invalidAddress.response.status === 400,
+    "host details only accept numeric IPs",
+  );
+  const address = assignedPrivateAddress();
+  if (!address) return "SKIP (no assigned private IPv4 interface)";
+  const routes = [
+    { path: "/api/v1/knowledge/settings" },
+    { path: "/api/v1/knowledge/host?address=127.0.0.1" },
+    {
+      path: "/api/v1/knowledge/profiles",
+      method: "POST",
+      body: { profile_ids: [], refresh: false },
+    },
+  ];
+  for (const route of routes) {
+    const missing = await privateRequest(base, address, route.path, route);
+    assert(
+      missing.status === 401,
+      "remote knowledge route must require a Bearer token",
+    );
+    assert(
+      !missing.body?.profiles && !missing.body?.machine_name,
+      "unauthorized knowledge response must not contain advanced data",
+    );
+    const wrong = await privateRequest(base, address, route.path, {
+      ...route,
+      headers: { Authorization: "Bearer invalid-invalid-invalid-invalid" },
+    });
+    assert(
+      wrong.status === 401,
+      "remote knowledge route must reject a wrong token",
+    );
+    const accepted = await privateRequest(base, address, route.path, {
+      ...route,
+      headers: { Authorization: "Bearer " + token },
+    });
+    assert(
+      accepted.status === 200,
+      "valid token must permit read-only knowledge inspection",
+    );
+    if (route.path.endsWith("settings"))
+      assert(
+        accepted.body.can_configure === false,
+        "remote settings must advertise read-only configuration",
+      );
+    const badHost = await privateRequest(base, address, route.path, {
+      ...route,
+      headers: { Authorization: "Bearer " + token, Host: "evil.example" },
+    });
+    assert(
+      badHost.status === 400 && badHost.body?.code === "invalid_host",
+      "knowledge routes must enforce Host validation after authentication",
+    );
+    const badOrigin = await privateRequest(base, address, route.path, {
+      ...route,
+      headers: {
+        Authorization: "Bearer " + token,
+        Origin: "https://evil.example",
+      },
+    });
+    assert(
+      badOrigin.status === 403 && badOrigin.body?.code === "invalid_origin",
+      "knowledge routes must reject cross-origin callers",
+    );
+  }
+  const write = await privateRequest(
+    base,
+    address,
+    "/api/v1/knowledge/settings",
+    {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + token },
+      body: settings,
+    },
+  );
+  assert(
+    write.status === 403 && write.body?.code === "local_settings_only",
+    "valid remote token must never allow settings writes",
+  );
+  const scan = await privateRequest(base, address, "/api/v1/scan", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  assert(
+    scan.status === 403 && !scan.body?.entries,
+    "API-only remote access must not reveal full scans",
+  );
+  return "PASS";
+}
+
 function startMcp(base) {
   const child = spawn(binary, ["mcp", "--server", base], {
     cwd: root,
-    env: { ...process.env, PORTVIEWER_API_TOKEN: token, RUST_LOG: "warn" },
+    env: serviceEnvironment,
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -169,6 +421,10 @@ function startMcp(base) {
 }
 
 async function main() {
+  const expectedVersion = JSON.parse(
+    await readFile(path.join(root, "package.json"), "utf8"),
+  ).version;
+  await verifyGuiBinaryVersion(expectedVersion);
   const portProbe = net.createServer();
   const apiPort = await listen(portProbe);
   await close(portProbe);
@@ -182,7 +438,7 @@ async function main() {
     ["serve", "--api-only", "--listen", `0.0.0.0:${apiPort}`],
     {
       cwd: root,
-      env: { ...process.env, PORTVIEWER_API_TOKEN: token, RUST_LOG: "warn" },
+      env: serviceEnvironment,
       stdio: ["ignore", "ignore", "pipe"],
       windowsHide: true,
     },
@@ -206,6 +462,8 @@ async function main() {
       removedScan.status === 404,
       "API-only mode must remove full scan route",
     );
+
+    const knowledgeAuthorization = await checkKnowledgeAuthorization(base);
 
     const basic = await fetchJson(
       `${base}/api/v1/ports/check?ports=${occupiedPort},30001-30002&protocol=tcp`,
@@ -365,7 +623,7 @@ async function main() {
       ],
       {
         cwd: root,
-        env: { ...process.env, PORTVIEWER_API_TOKEN: token, RUST_LOG: "warn" },
+        env: serviceEnvironment,
         timeout: 30_000,
         windowsHide: true,
       },
@@ -525,6 +783,7 @@ async function main() {
           api: "PASS",
           cli: "PASS",
           mcp: "PASS",
+          knowledgeAuthorization,
           capacityMs: Number(capacityMs.toFixed(1)),
           occupiedPort,
           suggestedPort: free.body.port,

@@ -34,7 +34,7 @@ fn node_attribution(
     let project = tokens
         .iter()
         .find_map(|token| project_from_node_modules(token));
-    let name = match (&npm_script, &project, &entry) {
+    let mut name = match (&npm_script, &project, &entry) {
         (Some(script), Some(project), _) => format!("npm: {script} · {project}"),
         (Some(script), None, _) => format!("npm: {script}"),
         (None, _, Some(entry)) => format!("Node.js: {entry}"),
@@ -50,10 +50,32 @@ fn node_attribution(
     if let Some(entry) = entry {
         facts.push(fact("入口", entry));
     }
+    let declared = crate::knowledge::local::project(&tokens, false);
+    if let Some(project) = &declared {
+        if let Some(project_name) = &project.name {
+            name = format!("Node.js: {project_name}");
+        }
+        facts.push(fact("项目路径", project.root.to_string_lossy()));
+        facts.push(fact("配置路径", project.metadata.to_string_lossy()));
+        facts.push(fact(
+            "项目私有声明",
+            if project.private {
+                "是"
+            } else {
+                "未声明；不自动外传项目标识"
+            },
+        ));
+        if project.description.is_some() {
+            facts.push(fact("简介来源", "package.json description"));
+        }
+    }
+    if let Some(launcher) = crate::knowledge::local::launcher(&tokens, false) {
+        facts.push(fact("公开软件", launcher));
+    }
     Some(ServiceAttribution {
         kind: AttributionKind::NodeApplication,
         name,
-        description: Some("Node.js/npm 临时运行工作负载".to_string()),
+        description: declared.and_then(|project| project.description),
         confidence: if facts.is_empty() {
             AttributionConfidence::Medium
         } else {
@@ -66,15 +88,9 @@ fn node_attribution(
 
 fn python_attribution(process: &ProcessRecord) -> Option<ServiceAttribution> {
     let tokens = tokenize(process.command_line.as_deref()?);
-    let module = tokens
-        .windows(2)
-        .find(|pair| pair[0] == "-m")
-        .map(|pair| pair[1].clone());
-    let script = tokens.iter().find(|token| {
-        let lower = token.to_ascii_lowercase();
-        lower.ends_with(".py") || lower.ends_with(".pyw")
-    });
-    let (name, confidence) = if let Some(module) = &module {
+    let module = crate::knowledge::local::python_module(&tokens);
+    let script = crate::knowledge::local::entrypoint(&tokens, true);
+    let (mut name, confidence) = if let Some(module) = &module {
         (
             format!("Python module: {module}"),
             AttributionConfidence::High,
@@ -94,10 +110,25 @@ fn python_attribution(process: &ProcessRecord) -> Option<ServiceAttribution> {
     if let Some(script) = script {
         facts.push(fact("入口", safe_path_summary(script)));
     }
+    let declared = crate::knowledge::local::project(&tokens, true);
+    if let Some(project) = &declared {
+        if let Some(project_name) = &project.name {
+            name = format!("Python: {project_name}");
+        }
+        facts.push(fact("项目路径", project.root.to_string_lossy()));
+        facts.push(fact("配置路径", project.metadata.to_string_lossy()));
+        facts.push(fact("项目私有声明", "本机项目标识不自动外传"));
+        if project.description.is_some() {
+            facts.push(fact("简介来源", "pyproject.toml description"));
+        }
+    }
+    if let Some(launcher) = crate::knowledge::local::launcher(&tokens, true) {
+        facts.push(fact("公开软件", launcher));
+    }
     Some(ServiceAttribution {
         kind: AttributionKind::PythonApplication,
         name,
-        description: Some("Python 临时运行工作负载".to_string()),
+        description: declared.and_then(|project| project.description),
         confidence,
         source: "Win32_Process 命令行（脱敏摘要）".to_string(),
         facts,
@@ -135,16 +166,7 @@ fn npm_script_from_command(command: &str) -> Option<String> {
 }
 
 fn node_entrypoint(tokens: &[String]) -> Option<String> {
-    tokens
-        .iter()
-        .skip(1)
-        .find(|token| {
-            let lower = token.to_ascii_lowercase();
-            [".js", ".mjs", ".cjs", ".ts", ".tsx"]
-                .iter()
-                .any(|extension| lower.ends_with(extension))
-        })
-        .map(|token| safe_path_summary(token))
+    crate::knowledge::local::entrypoint(tokens, false).map(safe_path_summary)
 }
 
 fn project_from_node_modules(token: &str) -> Option<String> {
@@ -285,5 +307,26 @@ mod tests {
             classify(2, &snapshot(vec![script]))[0].name,
             "Python: server.py"
         );
+    }
+    #[test]
+    fn python_inline_code_and_module_arguments_are_not_script_entrypoints() {
+        for (command, expected) in [
+            ("python -c fake.py", "Python 应用"),
+            ("python -m uvicorn app.py", "Python module: uvicorn"),
+        ] {
+            let result = classify(
+                42,
+                &snapshot(vec![ProcessRecord {
+                    process_id: 42,
+                    parent_process_id: 0,
+                    name: Some("python.exe".into()),
+                    executable_path: None,
+                    command_line: Some(command.into()),
+                    created_at: None,
+                }]),
+            );
+            assert_eq!(result[0].name, expected);
+            assert!(!result[0].facts.iter().any(|fact| fact.label == "入口"));
+        }
     }
 }
