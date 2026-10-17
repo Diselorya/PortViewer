@@ -19,6 +19,8 @@ import {
   groupEntries,
   type FacetField,
   type FacetFilters,
+  type ConditionMode,
+  type FacetFieldModes,
 } from "../domain/portFacets";
 import { DEFAULT_SETTINGS, type AppSettings } from "../types/settings";
 import {
@@ -85,10 +87,26 @@ export const useAppStore = defineStore("app", () => {
     hasScanned = ref(false),
     scanError = ref<string | null>(null),
     stale = ref(false),
-    query = ref(""),
-    protocols = ref<string[]>([]),
-    states = ref<string[]>([]),
-    facetFilters = ref<FacetFilters>({}),
+    query = computed<string>({
+      get: () => settings.value.query,
+      set: (value) => updateSettings({ query: value }),
+    }),
+    facetFilters = computed<FacetFilters>({
+      get: () => settings.value.facetFilters,
+      set: (value) => updateSettings({ facetFilters: value }),
+    }),
+    protocols = computed<string[]>({
+      get: () => facetFilters.value.protocol ?? [],
+      set: (value) => setFacetFilter("protocol", value),
+    }),
+    states = computed<string[]>({
+      get: () => facetFilters.value.state ?? [],
+      set: (value) => setFacetFilter("state", value),
+    }),
+    filterMode = computed<ConditionMode>(() => settings.value.filterMode),
+    filterFieldModes = computed<FacetFieldModes>(
+      () => settings.value.filterFieldModes,
+    ),
     groupBy = computed<FacetField | null>({
       get: () => settings.value.groupBy,
       set: (value) => updateSettings({ groupBy: value }),
@@ -380,11 +398,9 @@ export const useAppStore = defineStore("app", () => {
     }
   }
 
-  const effectiveFacetFilters = computed<FacetFilters>(() => ({
-      ...facetFilters.value,
-      protocol: protocols.value,
-      state: states.value,
-    })),
+  const effectiveFacetFilters = computed<FacetFilters>(
+      () => facetFilters.value,
+    ),
     filteredEntries = computed(() =>
       queryEntries(
         entries.value,
@@ -394,15 +410,13 @@ export const useAppStore = defineStore("app", () => {
         sort.value,
         effectiveFacetFilters.value,
         displayFor,
+        { mode: filterMode.value, fieldModes: filterFieldModes.value },
       ),
-    ),
-    cappedEntries = computed(() =>
-      filteredEntries.value.slice(0, settings.value.maxEntries),
     ),
     entryGroups = computed(() =>
       groupBy.value
         ? groupEntries(
-            cappedEntries.value,
+            filteredEntries.value,
             groupBy.value,
             displayFor,
             sort.value.find((spec) => spec.field === groupBy.value)?.order ?? 1,
@@ -412,11 +426,9 @@ export const useAppStore = defineStore("app", () => {
     viewEntries = computed(() =>
       groupBy.value
         ? entryGroups.value.flatMap((group) => group.entries)
-        : cappedEntries.value,
+        : filteredEntries.value,
     ),
-    limitedEntries = computed(() =>
-      entries.value.slice(0, settings.value.maxEntries),
-    ),
+    limitedEntries = computed(() => entries.value),
     isTruncated = computed(
       () =>
         backendTruncated.value ||
@@ -441,8 +453,6 @@ export const useAppStore = defineStore("app", () => {
     activeFilterCount = computed(
       () =>
         Number(Boolean(query.value.trim())) +
-        protocols.value.length +
-        states.value.length +
         Object.values(facetFilters.value).reduce(
           (count, values) => count + (values?.length ?? 0),
           0,
@@ -546,7 +556,7 @@ export const useAppStore = defineStore("app", () => {
         );
       }
     },
-    { deep: true },
+    { deep: true, flush: "sync" },
   );
   function notify(type: "success" | "error" | "info", text: string) {
     notification.value = { type, text };
@@ -657,16 +667,27 @@ export const useAppStore = defineStore("app", () => {
     return activeRefresh;
   }
   function clearFilters() {
-    query.value = "";
-    protocols.value = [];
-    states.value = [];
-    facetFilters.value = {};
+    updateSettings({
+      query: "",
+      facetFilters: {},
+      filterMode: "all",
+      filterFieldModes: {},
+    });
   }
   function setFacetFilter(field: FacetField, values: string[]) {
-    const unique = [...new Set(values)];
-    if (field === "protocol") protocols.value = unique;
-    else if (field === "state") states.value = unique;
-    else facetFilters.value = { ...facetFilters.value, [field]: unique };
+    const next = { ...facetFilters.value };
+    if (values.length) next[field] = [...new Set(values)];
+    else delete next[field];
+    updateSettings({ facetFilters: next });
+  }
+  function setFacetFilters(filters: FacetFilters) {
+    updateSettings({ facetFilters: filters });
+  }
+  function setFilterMode(mode: ConditionMode) {
+    updateSettings({ filterMode: mode });
+  }
+  function setFilterFieldModes(modes: FacetFieldModes) {
+    updateSettings({ filterFieldModes: modes });
   }
   function selectEntry(e: PortEntry | null) {
     selectedKey.value = e ? entryKey(e) : null;
@@ -726,7 +747,14 @@ export const useAppStore = defineStore("app", () => {
     }
   }
   function updateSettings(p: Partial<AppSettings>) {
-    settings.value = validateSettings({ ...settings.value, ...p });
+    const next = { ...settings.value, ...p };
+    if (
+      p.groupBy !== undefined &&
+      p.groupBy !== settings.value.groupBy &&
+      !p.groupExpansion
+    )
+      next.groupExpansion = { defaultExpanded: true, exceptions: [] };
+    settings.value = validateSettings(next);
   }
   async function loadPrivilegeStatus() {
     try {
@@ -827,6 +855,8 @@ export const useAppStore = defineStore("app", () => {
                     query: query.value,
                     protocols: [...protocols.value],
                     states: [...states.value],
+                    mode: filterMode.value,
+                    fieldModes: { ...filterFieldModes.value },
                     facets: Object.fromEntries(
                       Object.entries(effectiveFacetFilters.value).map(
                         ([field, values]) => [field, [...(values ?? [])]],
@@ -904,6 +934,8 @@ export const useAppStore = defineStore("app", () => {
     states,
     facetFilters,
     effectiveFacetFilters,
+    filterMode,
+    filterFieldModes,
     groupBy,
     entryGroups,
     sort,
@@ -933,6 +965,9 @@ export const useAppStore = defineStore("app", () => {
     refresh,
     clearFilters,
     setFacetFilter,
+    setFacetFilters,
+    setFilterMode,
+    setFilterFieldModes,
     selectEntry,
     canKill,
     openKill,

@@ -8,7 +8,9 @@ import {
 import {
   ALL_COLUMN_FIELDS,
   COLUMN_WIDTH_LIMITS,
+  DEFAULT_COLUMN_ORDER,
   DEFAULT_SETTINGS,
+  DEFAULT_VISIBLE_COLUMNS,
 } from "../../types/settings";
 import type { PortColorRule } from "../../types/settings";
 import { cellColor, rowColor } from "../portColor";
@@ -19,7 +21,7 @@ import { displayEntry } from "../serviceKnowledge";
 import { port, profile } from "./workbenchFixtures";
 
 describe("workbench settings migration", () => {
-  it.each([1, 2, 3])(
+  it.each([1, 2, 3, 4])(
     "should migrate schema %i once while preserving hidden unrelated fields",
     (schemaVersion) => {
       const migrated = validateSettings({
@@ -27,13 +29,8 @@ describe("workbench settings migration", () => {
         visibleColumns: ["local_port", "process_name", "remote_address"],
         columnOrder: ["pid", "local_port"],
       });
-      expect(migrated.schemaVersion).toBe(4);
-      expect(migrated.visibleColumns.slice(0, 2)).toEqual([
-        "service_name",
-        "service_description",
-      ]);
+      expect(migrated.schemaVersion).toBe(5);
       expect(migrated.visibleColumns).not.toContain("protocol");
-      expect(migrated.visibleColumns).toContain("remote_host");
       expect(migrated.columnOrder.slice(0, 2)).toEqual(["pid", "local_port"]);
       expect(validateSettings(migrated)).toEqual(migrated);
     },
@@ -49,11 +46,123 @@ describe("workbench settings migration", () => {
     undefined,
     [],
     "broken",
-    { schemaVersion: 5 },
+    { schemaVersion: 6 },
     { schemaVersion: "4" },
     { schemaVersion: 3.5 },
   ])("should recover invalid settings envelope %o", (value) => {
     expect(validateSettings(value)).toEqual(DEFAULT_SETTINGS);
+  });
+  it("should use the fresh default order when no saved settings fields exist", () => {
+    expect(validateSettings({})).toEqual(DEFAULT_SETTINGS);
+  });
+  it("should use the requested thirteen-field order for a fresh view", () => {
+    const fields = [
+      "service_name",
+      "process_name",
+      "attribution_kind",
+      "attribution",
+      "state",
+      "protocol",
+      "local_address",
+      "local_port",
+      "role",
+      "remote_host",
+      "remote_address",
+      "remote_port",
+      "service_description",
+    ];
+    expect(DEFAULT_VISIBLE_COLUMNS).toEqual(fields);
+    expect(DEFAULT_COLUMN_ORDER.slice(0, fields.length)).toEqual(fields);
+  });
+  it("should migrate the old default layout while preserving deliberate custom visibility and order", () => {
+    const old = validateSettings({
+      schemaVersion: 4,
+      visibleColumns: [
+        "service_name",
+        "service_description",
+        "protocol",
+        "local_address",
+        "local_port",
+        "role",
+        "remote_address",
+        "remote_host",
+        "remote_port",
+        "state",
+        "service_manager",
+        "attribution",
+        "pid",
+        "process_name",
+      ],
+      columnOrder: [
+        "service_name",
+        "service_description",
+        "local_port",
+        "local_address",
+        "local_host",
+        "protocol",
+        "state",
+        "role",
+        "remote_host",
+        "remote_address",
+        "remote_port",
+        "service_manager",
+        "attribution",
+        "pid",
+        "process_name",
+        "process_path",
+        "ip_version",
+        "attribution_kind",
+        "attribution_confidence",
+        "process_status",
+        "process_created_at",
+      ],
+    });
+    expect(old.visibleColumns).toEqual(DEFAULT_VISIBLE_COLUMNS);
+    expect(old.columnOrder).toEqual(DEFAULT_COLUMN_ORDER);
+    const custom = validateSettings({
+      schemaVersion: 4,
+      visibleColumns: ["pid", "local_port"],
+      columnOrder: ["pid", "local_port"],
+    });
+    expect(custom.visibleColumns).toEqual(["pid", "local_port"]);
+    expect(custom.columnOrder.slice(0, 2)).toEqual(["pid", "local_port"]);
+  });
+  it("should validate persisted condition modes and discard unknown fields", () => {
+    expect(
+      validateSettings({
+        schemaVersion: 5,
+        filterMode: "any",
+        filterFieldModes: {
+          protocol: "all",
+          state: "invalid",
+          arbitrary: "any",
+        },
+        query: "node",
+        facetFilters: { protocol: ["Tcp"] },
+        groupExpansion: {
+          defaultExpanded: false,
+          exceptions: ["one", "one", 42],
+        },
+      }),
+    ).toMatchObject({
+      filterMode: "any",
+      filterFieldModes: { protocol: "all" },
+      query: "node",
+      facetFilters: { protocol: ["Tcp"] },
+      groupExpansion: { defaultExpanded: false, exceptions: ["one"] },
+    });
+    expect(
+      validateSettings({
+        schemaVersion: 5,
+        filterMode: "invalid",
+        filterFieldModes: null,
+        groupExpansion: "invalid",
+      }),
+    ).toMatchObject({
+      filterMode: "all",
+      filterFieldModes: {},
+      groupExpansion: { defaultExpanded: true, exceptions: [] },
+    });
   });
   it("should clamp manual widths and discard unrecognized columns and nonfinite numbers", () => {
     const result = validateSettings({
@@ -124,12 +233,19 @@ describe("workbench settings migration", () => {
         { ...valid, id: "row", target: { kind: "row" }, enabled: false },
       ]),
     ).toEqual([
-      { ...valid, target: { kind: "columns", fields: ["local_port"] } },
+      {
+        ...valid,
+        mode: "all",
+        fieldModes: {},
+        target: { kind: "columns", fields: ["local_port"] },
+      },
       {
         id: "row",
         enabled: false,
         color: "blue",
         filters: { state: ["Listen"] },
+        mode: "all",
+        fieldModes: {},
         target: { kind: "row" },
       },
     ]);
@@ -150,6 +266,35 @@ const colorRule = (patch: Partial<PortColorRule> = {}): PortColorRule => ({
   ...patch,
 });
 describe("conditional coloring", () => {
+  it("should use the same outer-any and inner-all condition semantics as the filtered list", () => {
+    const rows = [
+      port({ pid: 1 }),
+      port({ pid: 2, state: "Established" }),
+      port({ pid: 3, protocol: "Udp", state: null }),
+    ];
+    const filters = { protocol: ["Tcp", "Udp"], state: ["Listen"] };
+    const rule = colorRule({
+      filters,
+      mode: "any",
+      fieldModes: { protocol: "all" },
+    });
+    expect(
+      queryEntries(rows, "", [], [], [], filters, undefined, {
+        mode: "any",
+        fieldModes: { protocol: "all" },
+      }).map((row) => row.pid),
+    ).toEqual([1]);
+    expect(
+      rows
+        .filter((row) => rowColor(row, [rule]) === "blue")
+        .map((row) => row.pid),
+    ).toEqual([1]);
+    expect(rows.map((row) => cellColor(row, "local_port", [rule]))).toEqual([
+      "blue",
+      null,
+      null,
+    ]);
+  });
   it("should use the first matching rule per cell while keeping unrelated columns unchanged", () => {
     const rules = [
       colorRule({

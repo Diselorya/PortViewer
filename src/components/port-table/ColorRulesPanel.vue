@@ -38,7 +38,15 @@ function add() {
   store.updateSettings({
     colorRules: [
       ...rules.value,
-      { id, enabled: true, filters, target: { kind: "row" }, color: "blue" },
+      {
+        id,
+        enabled: true,
+        filters,
+        mode: store.filterMode,
+        fieldModes: { ...store.filterFieldModes },
+        target: { kind: "row" },
+        color: "blue",
+      },
     ],
   });
   expanded.value = id;
@@ -182,9 +190,13 @@ function summary(rule: PortColorRule) {
       <FacetConditionEditor
         v-if="expanded === rule.id"
         :model-value="rule.filters"
+        :mode="rule.mode ?? 'all'"
+        :field-modes="rule.fieldModes ?? {}"
         :entries="store.entries"
         :display-for="store.displayFor"
         @update:model-value="patch(rule.id, { filters: $event })"
+        @update:mode="patch(rule.id, { mode: $event })"
+        @update:field-modes="patch(rule.id, { fieldModes: $event })"
       />
     </article>
     <button

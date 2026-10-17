@@ -2460,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "portviewer-app"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "log",
  "quick-xml",

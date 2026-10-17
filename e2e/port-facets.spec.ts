@@ -50,13 +50,13 @@ async function load(
 ) {
   await page.addInitScript(
     (settings) =>
+      !localStorage.getItem("portviewer.settings.v1") &&
       localStorage.setItem(
         "portviewer.settings.v1",
         JSON.stringify({
-          schemaVersion: 4,
+          schemaVersion: 5,
           language: "en-US",
           refreshIntervalMs: 0,
-          maxEntries: 100000,
           visibleColumns: [
             "protocol",
             "local_address",
@@ -340,7 +340,8 @@ test("should bound DOM rows when grouping one hundred thousand endpoints", async
   await setGroup(page, "local_address");
   await expect(page.getByTestId("port-group-header").first()).toBeVisible();
   expect(await page.locator("tbody tr").count()).toBeLessThanOrEqual(200);
-  expect(await page.locator("tbody .port-number").count()).toBe(100);
+  expect(await page.locator("tbody .port-number").count()).toBeGreaterThan(0);
+  await expect(page.locator(".p-paginator")).toHaveCount(0);
   for (let refresh = 0; refresh < 2; refresh++) {
     await Promise.all([
       page.waitForResponse((response) =>
@@ -353,8 +354,18 @@ test("should bound DOM rows when grouping one hundred thousand endpoints", async
     ).toBeEnabled();
     expect(await page.locator("tbody tr").count()).toBeLessThanOrEqual(200);
   }
-  await page.locator(".p-paginator-next").click();
-  await expect(page.locator("tbody .port-number").first()).not.toHaveText("0");
+  await page
+    .locator('[data-testid="port-table"] .p-virtualscroller')
+    .evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+    });
+  await expect(page.locator("tbody .port-number").last()).toHaveText(
+    portLabel(34463),
+  );
+  await expect(
+    page.locator('tbody td[data-column-field="local_address"]').last(),
+  ).toHaveText("10.1.134.159");
   expect(await page.locator("tbody tr").count()).toBeLessThanOrEqual(200);
   await setGroup(page, "");
   await expect(page.getByTestId("port-group-header")).toHaveCount(0);
@@ -386,9 +397,7 @@ test("should migrate legacy columns and translate the independent fields in the 
   await expect(
     page.getByRole("columnheader", { name: /本地端口/ }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("columnheader", { name: /方向 \/ 角色/ }),
-  ).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /方向/ })).toBeVisible();
   await expect(
     page.getByRole("columnheader", { name: /上级服务/ }),
   ).toBeVisible();
@@ -412,7 +421,7 @@ test("should migrate legacy columns and translate the independent fields in the 
   const settings = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("portviewer.settings.v1")!),
   );
-  expect(settings.schemaVersion).toBe(4);
+  expect(settings.schemaVersion).toBe(5);
   expect(settings.visibleColumns).toEqual([
     "service_name",
     "service_description",
@@ -443,6 +452,14 @@ test("should preserve compact table geometry while sorting and reordering visibl
         "protocol",
         "state",
       ],
+      columnOrder: [
+        "service_name",
+        "service_description",
+        "local_port",
+        "local_address",
+        "protocol",
+        "state",
+      ],
       density: "compact",
     },
   );
@@ -460,7 +477,9 @@ test("should preserve compact table geometry while sorting and reordering visibl
   expect(await tableGeometry(page)).toEqual(initial);
   await page.getByTestId("toolbar-sort").click();
   await panel(page, "fields");
-  const second = page.locator(".field-order-row").nth(1);
+  const second = page.locator(
+    '.field-order-row[data-column-field="service_description"]',
+  );
   await second.getByRole("button", { name: /Move up/ }).click();
   await page.getByTestId("auto-fit-columns").click();
   await page.getByTestId("toolbar-fields").click();
@@ -656,4 +675,241 @@ test("should keep transient public knowledge failures in the fixed bottom notice
   await expect(toggle).toBeDisabled();
   await expect(page.locator(".scan-notices-details")).toHaveCount(0);
   expect(await tableGeometry(page)).toEqual(initial);
+});
+
+test("should show arrows only for active sort fields and persist the selected direction", async ({
+  page,
+}) => {
+  await load(page, () =>
+    snapshot([
+      endpoint({ local_port: 80 }),
+      endpoint({ pid: 43, local_port: 443 }),
+    ]),
+  );
+  await expect(page.locator("thead .column-sort-arrow")).toHaveCount(0);
+  const header = page.locator('th[data-column-field="local_port"]');
+  await header.locator(".p-datatable-column-title").click();
+  await expect(page.locator("thead .column-sort-arrow")).toHaveCount(1);
+  await expect(header.locator(".column-sort-arrow")).toHaveText("↑");
+  await header.locator(".p-datatable-column-title").click();
+  await expect(header.locator(".column-sort-arrow")).toHaveText("↓");
+  await page.reload();
+  await expect(header.locator(".column-sort-arrow")).toHaveText("↓");
+  await expect(page.locator("thead .column-sort-arrow")).toHaveCount(1);
+  await expect(page.locator("tbody .port-number")).toHaveText(
+    [443, 80].map(portLabel),
+  );
+});
+
+test("should switch both levels of filter logic and apply the same conditions to coloring", async ({
+  page,
+}) => {
+  const rows = [
+    endpoint({ pid: 1, local_port: 80 }),
+    endpoint({ pid: 2, local_port: 81, state: "Established" }),
+    endpoint({ pid: 3, local_port: 53, protocol: "Udp", state: null }),
+  ];
+  await load(page, () => snapshot(rows));
+  await chooseFacet(page, "protocol", "Tcp");
+  await chooseFacet(page, "protocol", "Udp");
+  await chooseFacet(page, "state", "Listen");
+  await panel(page, "filters");
+  const filters = page.locator("#workbench-panel-filters");
+  await expect(
+    filters.locator('[data-condition-field="protocol"]'),
+  ).toHaveValue("any");
+  await filters
+    .locator('[data-condition-field="protocol"]')
+    .selectOption("all");
+  await expect(page.locator(".result-count")).toHaveText("0 matches");
+  await filters.getByTestId("condition-group-mode").selectOption("any");
+  await expect(page.locator(".result-count")).toHaveText("1 matches");
+  await page.getByTestId("toolbar-filters").click();
+  await page.reload();
+  await expect(page.locator(".result-count")).toHaveText("1 matches");
+  await panel(page, "filters");
+  await expect(filters.getByTestId("condition-group-mode")).toHaveValue("any");
+  await expect(
+    filters.locator('[data-condition-field="protocol"]'),
+  ).toHaveValue("all");
+  await page.getByTestId("toolbar-filters").click();
+  await page.locator("button.clear-all-filters").click();
+  await panel(page, "colors");
+  await page.getByTestId("add-color-rule").click();
+  const color = page.locator(".color-rule").first();
+  await color.getByTestId("facet-field").selectOption("protocol");
+  await color.getByTestId("facet-option-Tcp").check();
+  await color.getByTestId("facet-option-Udp").check();
+  await color.locator('[data-condition-field="protocol"]').selectOption("all");
+  await color.getByTestId("condition-group-mode").selectOption("any");
+  await color.getByRole("button", { name: "Red", exact: true }).click();
+  await page.getByTestId("toolbar-colors").click();
+  await expect(
+    page.locator('td[data-column-field="local_port"] .conditional-red'),
+  ).toHaveCount(1);
+  await expect(
+    page.locator('td[data-column-field="local_port"] .conditional-red'),
+  ).toHaveText(portLabel(80));
+  await page.reload();
+  await expect(
+    page.locator('td[data-column-field="local_port"] .conditional-red'),
+  ).toHaveCount(1);
+});
+
+test("should reach the final record of a large group without pagination and retain expansion across refresh and reload", async ({
+  page,
+}) => {
+  const rows = Array.from({ length: 250 }, (_, index) =>
+    endpoint({ pid: index + 10, local_port: index + 10000 }),
+  );
+  await load(page, () => snapshot(rows));
+  await setGroup(page, "protocol");
+  await expect(page.getByTestId("port-group-header")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.locator(".p-paginator")).toHaveCount(0);
+  const scroller = page.locator(
+    '[data-testid="port-table"] .p-virtualscroller',
+  );
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect(page.locator("tbody .port-number").last()).toHaveText(
+    portLabel(10249),
+  );
+  expect(await page.locator("tbody tr").count()).toBeLessThanOrEqual(200);
+  await scroller.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await page.getByTestId("port-group-header").click();
+  await expect(page.locator("tbody .port-number")).toHaveCount(0);
+  await page.getByRole("button", { name: "Refresh · F5" }).click();
+  await expect(page.getByTestId("port-group-header")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await page.reload();
+  await expect(page.getByTestId("port-group-header")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.locator("tbody .port-number")).toHaveCount(0);
+  await page.getByTestId("port-group-header").click();
+  await expect(page.locator("tbody .port-number").first()).toHaveText(
+    portLabel(10000),
+  );
+});
+
+test("should dismiss details outside the drawer and expose actual composed-address hyperlinks", async ({
+  page,
+}) => {
+  await load(page, () => snapshot([endpoint({ local_port: 12345 })]));
+  await page
+    .locator('td[data-column-field="local_port"] button.endpoint-action')
+    .click();
+  const drawer = page.getByTestId("detail-drawer");
+  await expect(drawer).toBeVisible();
+  const link = drawer.locator(".detail-context .endpoint-address-link");
+  await expect(link).toHaveAttribute("href", "http://127.0.0.1:12345/");
+  await expect(link).toContainText("127.0.0.1:12345");
+  await drawer.locator(".detail-purpose").click();
+  await expect(drawer).toBeVisible();
+  await page.locator(".p-dialog-mask").click({ position: { x: 10, y: 100 } });
+  await expect(drawer).toHaveCount(0);
+});
+
+test("should drag visible headers while preserving hidden fields and restore the new order and widths", async ({
+  page,
+}) => {
+  await load(page, () => snapshot([endpoint()]), {
+    visibleColumns: ["process_name", "local_port", "state"],
+    columnOrder: ["process_name", "pid", "local_port", "state"],
+    columnWidths: { local_port: 111 },
+    columnSizing: "manual",
+  });
+  const source = page.locator('th[data-column-field="state"]');
+  const target = page.locator('th[data-column-field="process_name"]');
+  await source.locator(".p-datatable-column-title").dispatchEvent("mousedown");
+  await source.dragTo(target, { targetPosition: { x: 5, y: 15 } });
+  await expect(page.locator("thead th").first()).toHaveAttribute(
+    "data-column-field",
+    "state",
+  );
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("portviewer.settings.v1")!),
+  );
+  expect(saved.columnOrder.slice(0, 4)).toEqual([
+    "state",
+    "pid",
+    "process_name",
+    "local_port",
+  ]);
+  expect(saved.visibleColumns).not.toContain("pid");
+  await page.reload();
+  await expect(page.locator("thead th").first()).toHaveAttribute(
+    "data-column-field",
+    "state",
+  );
+  expect(
+    await page
+      .locator("thead th")
+      .evaluateAll((headers) =>
+        headers.map((header) => header.getAttribute("data-column-field")),
+      ),
+  ).toEqual(["state", "process_name", "local_port"]);
+  await panel(page, "fields");
+  await page
+    .locator('.field-order-row[data-column-field="local_port"]')
+    .getByRole("button", { name: /Move up/ })
+    .click();
+  await page.getByTestId("toolbar-fields").click();
+  expect(
+    await page
+      .locator("thead th")
+      .evaluateAll((headers) =>
+        headers.map((header) => header.getAttribute("data-column-field")),
+      ),
+  ).toEqual(["state", "local_port", "process_name"]);
+  const restored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("portviewer.settings.v1")!),
+  );
+  expect(restored.columnWidths.local_port).toBe(111);
+  expect(restored.columnSizing).toBe("manual");
+});
+
+test("should reach the final associated connection beyond a hundred entries without a detail paginator", async ({
+  page,
+}) => {
+  const rows = Array.from({ length: 201 }, (_, index) =>
+    endpoint({ local_port: index + 10000 }),
+  );
+  await load(page, () => snapshot(rows), {
+    visibleColumns: ["service_name", "local_port"],
+  });
+  await page.locator(".service-name-action").first().click();
+  const drawer = page.getByTestId("detail-drawer");
+  await drawer.locator('[data-tab="connections"]').click();
+  await expect(drawer.locator('[data-tab="connections"] small')).toHaveText(
+    "201",
+  );
+  await expect(drawer.locator(".p-paginator, .connection-pages")).toHaveCount(
+    0,
+  );
+  const scroller = drawer.getByTestId("related-connections-list");
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const finalConnection = drawer.locator(
+    '.related-connection[aria-posinset="201"]',
+  );
+  await expect(finalConnection).toContainText("127.0.0.1:10200");
+  expect(await drawer.locator(".related-connection").count()).toBeLessThan(100);
+  await finalConnection.click();
+  await expect(drawer.locator(".detail-context")).toContainText(
+    "127.0.0.1:10200",
+  );
 });

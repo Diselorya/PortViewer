@@ -7,10 +7,7 @@
       "original_name": "Nginx",
       "summary": "HTTP 服务、反向代理和负载均衡；站点用途来自本机配置。",
       "component_role": "runtime",
-      "process_names": [
-        "nginx",
-        "nginx.exe"
-      ],
+      "process_names": ["nginx", "nginx.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -26,14 +23,8 @@
       "original_name": "Apache HTTP Server",
       "summary": "HTTP 网站和代理服务器；站点用途来自本机配置。",
       "component_role": "runtime",
-      "process_names": [
-        "apache2",
-        "httpd",
-        "httpd.exe"
-      ],
-      "service_names": [
-        "Apache2.4"
-      ],
+      "process_names": ["apache2", "httpd", "httpd.exe"],
+      "service_names": ["Apache2.4"],
       "public_ids": [
         {
           "provider": "github",
@@ -48,14 +39,8 @@
       "original_name": "IIS",
       "summary": "Windows Web 服务器与应用程序池宿主。",
       "component_role": "manager",
-      "process_names": [
-        "w3wp.exe",
-        "iisexpress.exe"
-      ],
-      "service_names": [
-        "W3SVC",
-        "WAS"
-      ],
+      "process_names": ["w3wp.exe", "iisexpress.exe"],
+      "service_names": ["W3SVC", "WAS"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -65,15 +50,8 @@
       "original_name": "Docker Engine",
       "summary": "管理本机容器、网络和镜像；业务用途来自具体容器。",
       "component_role": "manager",
-      "process_names": [
-        "dockerd",
-        "dockerd.exe",
-        "com.docker.backend.exe"
-      ],
-      "service_names": [
-        "com.docker.service",
-        "docker.service"
-      ],
+      "process_names": ["dockerd", "dockerd.exe", "com.docker.backend.exe"],
+      "service_names": ["com.docker.service", "docker.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -88,9 +66,7 @@
       "original_name": "docker-proxy",
       "summary": "将主机发布端口转发给容器；归属由 Docker 映射确认。",
       "component_role": "manager",
-      "process_names": [
-        "docker-proxy"
-      ],
+      "process_names": ["docker-proxy"],
       "service_names": [],
       "public_ids": [
         {
@@ -111,9 +87,7 @@
         "containerd.exe",
         "containerd-shim-runc-v2"
       ],
-      "service_names": [
-        "containerd.service"
-      ],
+      "service_names": ["containerd.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -128,9 +102,7 @@
       "original_name": "systemd",
       "summary": "启动和管理系统单元；用途来自实际服务单元。",
       "component_role": "manager",
-      "process_names": [
-        "systemd"
-      ],
+      "process_names": ["systemd"],
       "service_names": [],
       "public_ids": [
         {
@@ -146,12 +118,8 @@
       "original_name": "systemd-resolved",
       "summary": "提供本机 DNS 解析和缓存。",
       "component_role": "system",
-      "process_names": [
-        "systemd-resolved"
-      ],
-      "service_names": [
-        "systemd-resolved.service"
-      ],
+      "process_names": ["systemd-resolved"],
+      "service_names": ["systemd-resolved.service"],
       "public_ids": [],
       "source_url": "https://systemd.io/"
     },
@@ -161,12 +129,8 @@
       "original_name": "systemd-timesyncd",
       "summary": "通过网络校准本机系统时间。",
       "component_role": "system",
-      "process_names": [
-        "systemd-timesyncd"
-      ],
-      "service_names": [
-        "systemd-timesyncd.service"
-      ],
+      "process_names": ["systemd-timesyncd"],
+      "service_names": ["systemd-timesyncd.service"],
       "public_ids": [],
       "source_url": "https://systemd.io/"
     },
@@ -176,15 +140,8 @@
       "original_name": "OpenSSH Server",
       "summary": "提供加密远程登录、命令执行和文件传输。",
       "component_role": "system",
-      "process_names": [
-        "sshd",
-        "sshd.exe"
-      ],
-      "service_names": [
-        "ssh.service",
-        "sshd.service",
-        "sshd"
-      ],
+      "process_names": ["sshd", "sshd.exe"],
+      "service_names": ["ssh.service", "sshd.service", "sshd"],
       "public_ids": [
         {
           "provider": "github",
@@ -199,13 +156,8 @@
       "original_name": "PostgreSQL",
       "summary": "关系数据库；业务用途以本机部署为准。",
       "component_role": "runtime",
-      "process_names": [
-        "postgres",
-        "postgres.exe"
-      ],
-      "service_names": [
-        "postgresql.service"
-      ],
+      "process_names": ["postgres", "postgres.exe"],
+      "service_names": ["postgresql.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -220,15 +172,8 @@
       "original_name": "MySQL",
       "summary": "关系数据库；业务用途以本机部署为准。",
       "component_role": "runtime",
-      "process_names": [
-        "mysqld",
-        "mysqld.exe"
-      ],
-      "service_names": [
-        "MySQL",
-        "MySQL80",
-        "mysql.service"
-      ],
+      "process_names": ["mysqld", "mysqld.exe"],
+      "service_names": ["MySQL", "MySQL80", "mysql.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -243,13 +188,8 @@
       "original_name": "MariaDB",
       "summary": "关系数据库；业务用途以本机部署为准。",
       "component_role": "runtime",
-      "process_names": [
-        "mariadbd",
-        "mariadbd.exe"
-      ],
-      "service_names": [
-        "mariadb.service"
-      ],
+      "process_names": ["mariadbd", "mariadbd.exe"],
+      "service_names": ["mariadb.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -264,14 +204,8 @@
       "original_name": "Redis",
       "summary": "内存数据存储，常用于缓存和消息。",
       "component_role": "runtime",
-      "process_names": [
-        "redis-server",
-        "redis-server.exe"
-      ],
-      "service_names": [
-        "redis.service",
-        "redis-server.service"
-      ],
+      "process_names": ["redis-server", "redis-server.exe"],
+      "service_names": ["redis.service", "redis-server.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -286,14 +220,8 @@
       "original_name": "MongoDB",
       "summary": "文档数据库；业务用途以本机部署为准。",
       "component_role": "runtime",
-      "process_names": [
-        "mongod",
-        "mongod.exe"
-      ],
-      "service_names": [
-        "MongoDB",
-        "mongod.service"
-      ],
+      "process_names": ["mongod", "mongod.exe"],
+      "service_names": ["MongoDB", "mongod.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -308,10 +236,7 @@
       "original_name": "Node.js",
       "summary": "执行 JavaScript 服务或工具；不代表项目业务用途。",
       "component_role": "runtime",
-      "process_names": [
-        "node",
-        "node.exe"
-      ],
+      "process_names": ["node", "node.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -446,9 +371,7 @@
       "original_name": "Gunicorn",
       "summary": "运行 Python WSGI 应用并管理工作进程。",
       "component_role": "launcher",
-      "process_names": [
-        "gunicorn"
-      ],
+      "process_names": ["gunicorn"],
       "service_names": [],
       "public_ids": [
         {
@@ -496,10 +419,7 @@
       "original_name": "Jupyter",
       "summary": "通过浏览器提供交互代码、笔记和计算会话。",
       "component_role": "launcher",
-      "process_names": [
-        "jupyter-lab",
-        "jupyter-notebook"
-      ],
+      "process_names": ["jupyter-lab", "jupyter-notebook"],
       "service_names": [],
       "public_ids": [
         {
@@ -515,13 +435,8 @@
       "original_name": "Caddy",
       "summary": "Web 服务器与反向代理，支持自动 HTTPS。",
       "component_role": "runtime",
-      "process_names": [
-        "caddy",
-        "caddy.exe"
-      ],
-      "service_names": [
-        "caddy.service"
-      ],
+      "process_names": ["caddy", "caddy.exe"],
+      "service_names": ["caddy.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -536,13 +451,8 @@
       "original_name": "Traefik",
       "summary": "将请求路由到容器和其他后端。",
       "component_role": "runtime",
-      "process_names": [
-        "traefik",
-        "traefik.exe"
-      ],
-      "service_names": [
-        "traefik.service"
-      ],
+      "process_names": ["traefik", "traefik.exe"],
+      "service_names": ["traefik.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -557,12 +467,8 @@
       "original_name": "HAProxy",
       "summary": "提供 TCP/HTTP 代理、健康检查和负载均衡。",
       "component_role": "runtime",
-      "process_names": [
-        "haproxy"
-      ],
-      "service_names": [
-        "haproxy.service"
-      ],
+      "process_names": ["haproxy"],
+      "service_names": ["haproxy.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -577,12 +483,8 @@
       "original_name": "dnsmasq",
       "summary": "提供局域网域名缓存和地址分配。",
       "component_role": "system",
-      "process_names": [
-        "dnsmasq"
-      ],
-      "service_names": [
-        "dnsmasq.service"
-      ],
+      "process_names": ["dnsmasq"],
+      "service_names": ["dnsmasq.service"],
       "public_ids": [],
       "source_url": "https://www.freedesktop.org/"
     },
@@ -592,12 +494,8 @@
       "original_name": "Avahi",
       "summary": "通过 mDNS/DNS-SD 发布和发现服务。",
       "component_role": "system",
-      "process_names": [
-        "avahi-daemon"
-      ],
-      "service_names": [
-        "avahi-daemon.service"
-      ],
+      "process_names": ["avahi-daemon"],
+      "service_names": ["avahi-daemon.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -612,12 +510,8 @@
       "original_name": "CUPS",
       "summary": "管理打印队列并提供网络打印。",
       "component_role": "system",
-      "process_names": [
-        "cupsd"
-      ],
-      "service_names": [
-        "cups.service"
-      ],
+      "process_names": ["cupsd"],
+      "service_names": ["cups.service"],
       "public_ids": [
         {
           "provider": "github",
@@ -632,9 +526,7 @@
       "original_name": "Service Host",
       "summary": "承载 Windows 服务；应查看实际服务名。",
       "component_role": "system",
-      "process_names": [
-        "svchost.exe"
-      ],
+      "process_names": ["svchost.exe"],
       "service_names": [],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
@@ -646,9 +538,7 @@
       "summary": "缓存并解析本机 DNS 名称。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "Dnscache"
-      ],
+      "service_names": ["Dnscache"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -659,9 +549,7 @@
       "summary": "获得并维护本机 IP 配置。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "Dhcp"
-      ],
+      "service_names": ["Dhcp"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -672,11 +560,7 @@
       "summary": "支持 Windows 组件之间的调用和通信。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "RpcSs",
-        "RpcEptMapper",
-        "DcomLaunch"
-      ],
+      "service_names": ["RpcSs", "RpcEptMapper", "DcomLaunch"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -687,9 +571,7 @@
       "summary": "提供 SMB 文件和打印共享。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "LanmanServer"
-      ],
+      "service_names": ["LanmanServer"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -700,9 +582,7 @@
       "summary": "提供远程桌面会话和登录。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "TermService"
-      ],
+      "service_names": ["TermService"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -713,9 +593,7 @@
       "summary": "通过 WS-Management 提供远程管理。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "WinRM"
-      ],
+      "service_names": ["WinRM"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -725,12 +603,8 @@
       "original_name": "Print Spooler",
       "summary": "管理本机打印队列和打印服务。",
       "component_role": "system",
-      "process_names": [
-        "spoolsv.exe"
-      ],
-      "service_names": [
-        "Spooler"
-      ],
+      "process_names": ["spoolsv.exe"],
+      "service_names": ["Spooler"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -741,9 +615,7 @@
       "summary": "维护本机与网络的时间同步。",
       "component_role": "system",
       "process_names": [],
-      "service_names": [
-        "W32Time"
-      ],
+      "service_names": ["W32Time"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows-server/"
     },
@@ -753,9 +625,7 @@
       "original_name": "Windows System",
       "summary": "Windows 内核进程；具体监听用途需结合驱动、HTTP.sys 或已识别的系统服务确认。",
       "component_role": "system",
-      "process_names": [
-        "System"
-      ],
+      "process_names": ["System"],
       "service_names": [],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/windows/win32/procthread/processes-and-threads"
@@ -766,11 +636,7 @@
       "original_name": "Google Chrome",
       "summary": "Web 浏览器；出站连接通常来自网页、扩展或浏览器后台功能。",
       "component_role": "runtime",
-      "process_names": [
-        "chrome.exe",
-        "chrome",
-        "google-chrome"
-      ],
+      "process_names": ["chrome.exe", "chrome", "google-chrome"],
       "service_names": [],
       "public_ids": [],
       "source_url": "https://www.google.com/chrome/"
@@ -781,10 +647,7 @@
       "original_name": "Microsoft Edge",
       "summary": "Web 浏览器；具体连接用途需结合页面和扩展确认。",
       "component_role": "runtime",
-      "process_names": [
-        "msedge.exe",
-        "microsoft-edge"
-      ],
+      "process_names": ["msedge.exe", "microsoft-edge"],
       "service_names": [],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/deployedge/"
@@ -795,10 +658,7 @@
       "original_name": "Mozilla Firefox",
       "summary": "Web 浏览器；具体连接用途需结合页面和扩展确认。",
       "component_role": "runtime",
-      "process_names": [
-        "firefox",
-        "firefox.exe"
-      ],
+      "process_names": ["firefox", "firefox.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -814,10 +674,7 @@
       "original_name": "Visual Studio Code",
       "summary": "代码编辑器；端口可能属于扩展、调试适配器或开发工具。",
       "component_role": "runtime",
-      "process_names": [
-        "Code.exe",
-        "code"
-      ],
+      "process_names": ["Code.exe", "code"],
       "service_names": [],
       "public_ids": [
         {
@@ -833,11 +690,7 @@
       "original_name": "Java",
       "summary": "执行 Java 应用；业务简介和运行模式以本机应用证据为准。",
       "component_role": "runtime",
-      "process_names": [
-        "java",
-        "java.exe",
-        "javaw.exe"
-      ],
+      "process_names": ["java", "java.exe", "javaw.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -853,10 +706,7 @@
       "original_name": ".NET",
       "summary": "运行 .NET 应用；业务用途以本机应用证据为准。",
       "component_role": "runtime",
-      "process_names": [
-        "dotnet",
-        "dotnet.exe"
-      ],
+      "process_names": ["dotnet", "dotnet.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -872,13 +722,8 @@
       "original_name": "Microsoft SQL Server",
       "summary": "关系数据库服务；具体业务用途以本机数据库部署为准。",
       "component_role": "runtime",
-      "process_names": [
-        "sqlservr.exe",
-        "sqlservr"
-      ],
-      "service_names": [
-        "MSSQLSERVER"
-      ],
+      "process_names": ["sqlservr.exe", "sqlservr"],
+      "service_names": ["MSSQLSERVER"],
       "public_ids": [],
       "source_url": "https://learn.microsoft.com/sql/sql-server/"
     },
@@ -888,10 +733,7 @@
       "original_name": "Ollama",
       "summary": "提供本机模型运行与推理 API；具体模型需查看本机配置。",
       "component_role": "runtime",
-      "process_names": [
-        "ollama",
-        "ollama.exe"
-      ],
+      "process_names": ["ollama", "ollama.exe"],
       "service_names": [],
       "public_ids": [
         {
@@ -900,6 +742,149 @@
         }
       ],
       "source_url": "https://docs.ollama.com/"
+    },
+    {
+      "id": "windows-bits",
+      "display_name_zh": "后台智能传输服务",
+      "original_name": "Background Intelligent Transfer Service",
+      "summary": "使用空闲网络带宽执行后台文件传输。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["BITS"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-bfe",
+      "display_name_zh": "基本筛选引擎",
+      "original_name": "Base Filtering Engine",
+      "summary": "管理防火墙与 IPsec 策略以及用户模式网络筛选。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["BFE"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-function-discovery-host",
+      "display_name_zh": "功能发现提供程序宿主",
+      "original_name": "Function Discovery Provider Host",
+      "summary": "提供 SSDP、WS-Discovery 网络设备发现。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["fdPHost"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-function-discovery-publication",
+      "display_name_zh": "功能发现资源发布",
+      "original_name": "Function Discovery Resource Publication",
+      "summary": "向网络发布本机及其资源，供其他设备发现。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["FDResPub"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-ip-helper",
+      "display_name_zh": "IP 辅助服务",
+      "original_name": "IP Helper",
+      "summary": "支持 IPv6 过渡隧道、端口代理与 IP-HTTPS 连接。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["iphlpsvc"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-connection-sharing",
+      "display_name_zh": "Internet 连接共享服务",
+      "original_name": "Internet Connection Sharing",
+      "summary": "为小型网络提供 NAT、地址分配与名称解析。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["SharedAccess"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-push-notifications",
+      "display_name_zh": "Windows 推送通知系统服务",
+      "original_name": "Windows Push Notifications System Service",
+      "summary": "维护设备与 Windows 推送通知平台之间的连接。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["WpnService"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-push-notifications-user",
+      "display_name_zh": "Windows 推送通知用户服务",
+      "original_name": "Windows Push Notifications User Service",
+      "summary": "承载当前用户的本地通知与推送通知功能。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["WpnUserService"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "windows-edge-update",
+      "display_name_zh": "Microsoft Edge 更新服务",
+      "original_name": "Microsoft Edge Update Service",
+      "summary": "检查并安装 Microsoft 软件更新。",
+      "component_role": "system",
+      "process_names": [],
+      "service_names": ["edgeupdate", "edgeupdatem"],
+      "public_ids": [],
+      "source_url": "https://learn.microsoft.com/zh-cn/windows/iot/iot-enterprise/optimize/services"
+    },
+    {
+      "id": "systemd-networkd",
+      "display_name_zh": "系统网络配置服务",
+      "original_name": "systemd-networkd",
+      "summary": "根据本机网络配置管理设备、地址与路由。",
+      "component_role": "system",
+      "process_names": ["systemd-networkd"],
+      "service_names": ["systemd-networkd.service"],
+      "public_ids": [],
+      "source_url": "https://github.com/systemd/systemd/blob/main/man/systemd-networkd.service.xml"
+    },
+    {
+      "id": "networkmanager",
+      "display_name_zh": "网络连接管理服务",
+      "original_name": "NetworkManager",
+      "summary": "管理 Linux 网络设备与连接配置。",
+      "component_role": "system",
+      "process_names": ["NetworkManager"],
+      "service_names": ["NetworkManager.service"],
+      "public_ids": [],
+      "source_url": "https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/index.html"
+    },
+    {
+      "id": "dbus-daemon",
+      "display_name_zh": "D-Bus 消息总线服务",
+      "original_name": "dbus-daemon",
+      "summary": "在应用程序与系统组件之间转发进程间消息。",
+      "component_role": "system",
+      "process_names": ["dbus-daemon"],
+      "service_names": [],
+      "public_ids": [],
+      "source_url": "https://dbus.freedesktop.org/doc/dbus-daemon.1.html"
+    },
+    {
+      "id": "polkit",
+      "display_name_zh": "系统授权管理服务",
+      "original_name": "polkitd",
+      "summary": "根据本机策略处理应用程序的权限授权请求。",
+      "component_role": "system",
+      "process_names": ["polkitd"],
+      "service_names": ["polkit.service"],
+      "public_ids": [],
+      "source_url": "https://polkit.pages.freedesktop.org/polkit/polkitd.8.html"
     }
   ]
 }

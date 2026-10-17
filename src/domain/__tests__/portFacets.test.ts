@@ -232,6 +232,114 @@ describe("endpoint facets", () => {
   });
 });
 
+describe("switchable facet condition logic", () => {
+  it("should preserve any-selected-value behavior when a field mode is omitted", () => {
+    expect(
+      matchesFacetFilters(
+        entry(),
+        { state: ["Listen", "Established"] },
+        undefined,
+        { mode: "all", fieldModes: {} },
+      ),
+    ).toBe(true);
+    expect(
+      matchesFacetFilters(
+        entry({ state: "CloseWait" }),
+        { state: ["Listen", "Established"] },
+        undefined,
+        { mode: "all", fieldModes: {} },
+      ),
+    ).toBe(false);
+  });
+  it("should accept any matching active field in any mode", () => {
+    const row = entry();
+    expect(
+      matchesFacetFilters(
+        row,
+        { protocol: ["Udp"], state: ["Listen"] },
+        undefined,
+        { mode: "any" },
+      ),
+    ).toBe(true);
+    expect(
+      matchesFacetFilters(
+        row,
+        { protocol: ["Udp"], state: ["Listen"] },
+        undefined,
+        { mode: "all" },
+      ),
+    ).toBe(false);
+  });
+
+  it("should ignore empty fields instead of making any mode always true", () => {
+    expect(
+      matchesFacetFilters(
+        entry(),
+        { protocol: ["Udp"], state: [] },
+        undefined,
+        { mode: "any" },
+      ),
+    ).toBe(false);
+    expect(
+      matchesFacetFilters(entry(), { protocol: [], state: [] }, undefined, {
+        mode: "any",
+      }),
+    ).toBe(true);
+  });
+
+  it("should require all selected values only for a field configured as all", () => {
+    const row = entry({
+      attributions: [
+        attribution("NodeApplication"),
+        attribution("SystemdService"),
+      ],
+    });
+    const filters = { attribution_kind: ["NodeApplication", "SystemdService"] };
+    expect(
+      matchesFacetFilters(row, filters, undefined, {
+        fieldModes: { attribution_kind: "all" },
+      }),
+    ).toBe(true);
+    expect(
+      matchesFacetFilters(
+        entry({ attributions: [attribution("NodeApplication")] }),
+        filters,
+        undefined,
+        { fieldModes: { attribution_kind: "all" } },
+      ),
+    ).toBe(false);
+  });
+
+  it("should reject contradictory scalar alternatives in all mode", () => {
+    expect(
+      matchesFacetFilters(entry(), { protocol: ["Tcp", "Udp"] }, undefined, {
+        fieldModes: { protocol: "all" },
+      }),
+    ).toBe(false);
+    expect(
+      matchesFacetFilters(entry(), { protocol: ["Tcp", "Udp"] }, undefined, {
+        fieldModes: { protocol: "any" },
+      }),
+    ).toBe(true);
+  });
+
+  it("should combine outer any and inner all without losing their independence", () => {
+    const filters = { protocol: ["Tcp", "Udp"], state: ["Listen"] };
+    expect(
+      matchesFacetFilters(entry(), filters, undefined, {
+        mode: "any",
+        fieldModes: { protocol: "all" },
+      }),
+    ).toBe(true);
+    expect(
+      matchesFacetFilters(entry({ state: "Established" }), filters, undefined, {
+        mode: "any",
+        fieldModes: { protocol: "all" },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("service manager compatibility", () => {
   it("should honor an explicit manager supplied by the backend", () => {
     expect(

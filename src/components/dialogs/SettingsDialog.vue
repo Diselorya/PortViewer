@@ -81,24 +81,6 @@ async function updateKnowledgeToggle(key: KnowledgeToggle, event: Event) {
           </option>
         </select></label
       ><label
-        ><span
-          >{{ t("maxRows") }}<small>{{ t("maxRowsHint") }}</small></span
-        ><select
-          :value="store.settings.maxEntries"
-          @change="
-            patch(
-              'maxEntries',
-              Number(
-                ($event.target as HTMLSelectElement).value,
-              ) as AppSettings['maxEntries'],
-            )
-          "
-        >
-          <option v-for="n in [1000, 10000, 50000, 100000]" :key="n" :value="n">
-            {{ n.toLocaleString() }}
-          </option>
-        </select></label
-      ><label
         ><span>{{ t("scanStartup") }}</span
         ><input
           type="checkbox"

@@ -32,7 +32,7 @@ export const COLUMN_LABEL_KEYS: Partial<
   role: "directionRole",
   state: "state",
   service_manager: "serviceManager",
-  attribution: "workloadPurpose",
+  attribution: "attributionName",
   attribution_kind: "attributionKind",
   attribution_confidence: "attributionConfidence",
   process_status: "processState",

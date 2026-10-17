@@ -19,7 +19,7 @@ Servers collect services — databases, admin panels, reverse proxies, automatio
 
 It reads native TCP/UDP endpoints (IPv4/IPv6) on Windows and Linux and attributes every listener to the owning process, Windows service, Docker container, Nginx site or IIS application pool — searchable, filterable and exportable in a clean GUI, no `netstat`/`ss`/`lsof` required. It doubles as a fast evidence tool for developers, desktop admins and support engineers: locate what holds a port in seconds, copy diagnostics, and (desktop edition only) terminate the offending process safely after identity re-verification.
 
-The desktop app has **no accounts, no backend services and no telemetry** — it does not touch the network by default, and scan results live only in process memory. An optional bundled **web-service** adds a read-only WebGUI plus an explicitly-enabled, LAN-only, token-authenticated port-query API with CLI and MCP support: ask a host "is this port taken?" — anonymous calls get a yes/no answer, token holders get full attribution, and agents can request a currently bindable free port.
+The desktop app has **no accounts, no backend services and no telemetry** — basic scanning stays local, while public software metadata is automatically enriched online and can be disabled. Scan results live in process memory; view preferences are saved locally. An optional bundled **web-service** adds a read-only WebGUI plus an explicitly-enabled, LAN-only, token-authenticated port-query API with CLI and MCP support: ask a host "is this port taken?" — anonymous calls get a yes/no answer, token holders get full attribution, and agents can request a currently bindable free port.
 
 | Light | Dark |
 |:---:|:---:|
@@ -31,7 +31,7 @@ The desktop app has **no accounts, no backend services and no telemetry** — it
 - **Workload attribution** — map ports to Docker containers (container name, image, Compose project/service), Nginx `server_name` + config source, IIS sites and app pools, Windows services, NSSM, npm/Node.js entrypoints and Python scripts/modules, using native parent chains and SCM.
 - **Linux workload context** — identify Docker containers, systemd units, Node.js/Python projects and known system programs, with names, purpose/description, execution mode, project/config/mount paths and evidence sources. Missing permissions and descriptions are reported explicitly.
 - **Search that understands ports** — plain text plus field syntax: `port:`, `pid:`, `process:`, `service:`, `owner:`, `workload:`, `container:`, `project:`, `mode:`, `ip:`, `state:`, `protocol:`.
-- **Filter, sort, customize** — protocol and TCP-state filters, multi-column sorting, visible-column selection, light/dark/system themes, three density levels.
+- **Persistent full views** — all scan rows without pagination, virtual scrolling, all/any filters and color rules, multi-column sorting, draggable headers, saved search/group/column preferences, and three density levels.
 - **Live + safe refresh** — single-shot and auto refresh (pauses while the window is hidden), keeps the last good snapshot on scan failure.
 - **Evidence-grade export** — CSV (UTF-8 BOM, RFC 4180, formula-injection protection) and JSON of the full filtered/sorted view via the native save dialog.
 - **Guarded process termination** — desktop only; the backend re-verifies PID + creation time and refuses system-critical or ambiguous targets. See [Safety by design](#safety-by-design).

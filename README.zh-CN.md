@@ -6,7 +6,7 @@
 
 PortViewer 直接读取 Windows/Linux 网络端点，把 IPv4/IPv6 的 TCP、UDP 条目与进程身份、容器、站点、Windows 服务和脚本入口关联，搜索、筛选、导出一步到位——不爱命令行的用户点开界面就能看懂；开发、运维和技术支持也能快速定位端口占用、确认监听范围、复制排障证据，并在 Windows 桌面版中经过身份复核后终止错误进程。
 
-桌面版无账号、无后台服务，默认不联网；另提供默认只监听 loopback 的只读 WebGUI，以及显式启用、LAN-only、Token 分级授权的端口查询 API——问一句"这个端口被占了吗"，匿名只返回占用结论，Bearer Token 返回完整监听与归属，Agent 还能直接要一个当前可绑定的空闲端口。扫描结果只保存在当前进程内存中。
+桌面版无账号、无后台服务，基础扫描留在本机；公开软件资料默认自动联网补充，可在设置中关闭，AI 为可选功能；另提供默认只监听 loopback 的只读 WebGUI，以及显式启用、LAN-only、Token 分级授权的端口查询 API——问一句"这个端口被占了吗"，匿名只返回占用结论，Bearer Token 返回完整监听与归属，Agent 还能直接要一个当前可绑定的空闲端口。扫描结果保存在当前进程内存中，视图偏好自动保存在本机。
 
 ## v1 能做什么
 
@@ -17,7 +17,7 @@ PortViewer 直接读取 Windows/Linux 网络端点，把 IPv4/IPv6 的 TCP、UDP
 - 通过原生 Windows 进程父链和 Service Control Manager 识别 Windows Service、NSSM、npm/Node.js 入口与 Python 脚本/模块；
 - Linux WebGUI 识别 Docker 容器、systemd 服务、Node.js/Python 项目和系统程序用途；展示真实名称、简介、运行模式及项目/服务配置/容器挂载路径，并标注证据来源；
 - 搜索端口、PID、进程、工作负载、路径和 IP，并支持 `port:`、`pid:`、`process:`、`service:`、`owner:`、`workload:`、`container:`、`project:`、`mode:`、`ip:`、`state:`、`protocol:` 字段语法；
-- 按协议和 TCP 状态过滤、多列排序、选择可见列；
+- 全量列表无需翻页；筛选与着色支持任一/全部条件，多列排序、拖拽表头和选择可见列，搜索、分组、展开状态与列配置自动保存；
 - 单次和自动刷新，窗口隐藏时暂停，扫描失败时保留上一份成功数据；
 - 查看进程详情与全部关联端点，复制字段或完整诊断信息；
 - 通过 Windows 原生保存对话框导出当前过滤、排序后的视图为 CSV 或 JSON，并明确处理取消与写入失败；

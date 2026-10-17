@@ -8,7 +8,13 @@ function matches(
   rule: PortColorRule,
   displayFor?: EntryDisplayResolver,
 ): boolean {
-  return rule.enabled && matchesFacetFilters(entry, rule.filters, displayFor);
+  return (
+    rule.enabled &&
+    matchesFacetFilters(entry, rule.filters, displayFor, {
+      mode: rule.mode,
+      fieldModes: rule.fieldModes,
+    })
+  );
 }
 /** Rules apply in user order; an explicit empty condition matches all rows. */
 export function cellColor(

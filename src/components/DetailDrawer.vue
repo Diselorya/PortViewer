@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
+import VirtualScroller from "primevue/virtualscroller";
 import { useAppStore } from "../stores/app";
 import {
   attributionDetails,
@@ -57,7 +58,6 @@ const workloadPurpose = computed(
     "",
 );
 const tab = ref<"overview" | "evidence" | "connections">("overview"),
-  relatedPage = ref(0),
   tabBar = ref<HTMLElement | null>(null);
 const tabs = [
   { id: "overview" as const, label: "overview" as const },
@@ -119,20 +119,12 @@ const relatedEntries = computed(() => {
       entryKey(item) === entryKey(current),
   );
 });
-const visibleRelated = computed(() =>
-  relatedEntries.value.slice(
-    relatedPage.value * 100,
-    (relatedPage.value + 1) * 100,
-  ),
-);
 watch(kind, () => {
   tab.value = "overview";
-  relatedPage.value = 0;
 });
 watch(
   () => store.selectedDetail?.entryKey,
   () => {
-    relatedPage.value = 0;
     if (entry.value) {
       void store.loadHostContext();
       if (hasRemoteEndpoint(entry.value))
@@ -140,15 +132,6 @@ watch(
     }
   },
   { immediate: true },
-);
-watch(
-  () => relatedEntries.value.length,
-  (length) => {
-    relatedPage.value = Math.min(
-      relatedPage.value,
-      Math.max(0, Math.ceil(length / 100) - 1),
-    );
-  },
 );
 const linkContext = computed(() => ({
   runtime: store.webReadOnly ? ("web" as const) : ("desktop" as const),
@@ -159,6 +142,13 @@ function link(side: "local" | "remote", scheme?: "http" | "https") {
   return entry.value
     ? endpointLink(entry.value, side, { ...linkContext.value, scheme })
     : null;
+}
+function addressLink(side: "local" | "remote") {
+  const automatic = link(side);
+  return automatic?.url ? automatic : link(side, "http");
+}
+function addressLinkLabel(side: "local" | "remote") {
+  return link(side)?.url ? t("possibleWeb") : t("tryHttp");
 }
 function safeUrl(value: string | null | undefined) {
   try {
@@ -323,6 +313,7 @@ function terminate() {
   <Dialog
     :visible="Boolean(store.selectedDetail && entry)"
     modal
+    dismissableMask
     position="right"
     :draggable="false"
     :header="title"
@@ -345,8 +336,35 @@ function terminate() {
             : kind === "endpoint"
               ? t("endpointDetails")
               : t("machineDetails")
-        }}</span
-        ><code>{{
+        }}</span>
+        <a
+          v-if="addressLink(kind === 'remote' ? 'remote' : 'local')?.url"
+          class="endpoint-address-link"
+          :href="addressLink(kind === 'remote' ? 'remote' : 'local')!.url!"
+          target="_blank"
+          rel="noopener noreferrer"
+          :title="addressLink(kind === 'remote' ? 'remote' : 'local')?.reason"
+          @click="
+            visit(
+              $event,
+              addressLink(kind === 'remote' ? 'remote' : 'local')?.url,
+            )
+          "
+        >
+          <code>{{
+            kind === "remote" ? remoteEndpoint(entry) : localEndpoint(entry)
+          }}</code>
+          <small
+            v-if="
+              addressLink(kind === 'remote' ? 'remote' : 'local')?.kind !==
+              'web'
+            "
+            >{{
+              addressLinkLabel(kind === "remote" ? "remote" : "local")
+            }}</small
+          >
+        </a>
+        <code v-else>{{
           kind === "remote" ? remoteEndpoint(entry) : localEndpoint(entry)
         }}</code>
       </div>
@@ -499,7 +517,24 @@ function terminate() {
                   entry.protocol.toUpperCase()
                 }}</span>
               </header>
-              <code>{{
+              <a
+                v-if="addressLink(side)?.url"
+                class="endpoint-address-link"
+                :href="addressLink(side)!.url!"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="addressLink(side)?.reason"
+                @click="visit($event, addressLink(side)?.url)"
+                ><code>{{
+                  side === "local"
+                    ? localEndpoint(entry)
+                    : remoteEndpoint(entry)
+                }}</code>
+                <small v-if="addressLink(side)?.kind !== 'web'">{{
+                  addressLinkLabel(side)
+                }}</small>
+              </a>
+              <code v-else>{{
                 side === "local" ? localEndpoint(entry) : remoteEndpoint(entry)
               }}</code>
               <div class="endpoint-access-actions">
@@ -758,48 +793,66 @@ function terminate() {
             {{ t("relatedConnections") }}
             <small>{{ relatedEntries.length }}</small>
           </h3>
-          <button
-            v-for="item in visibleRelated"
-            :key="entryKey(item)"
-            class="related-connection"
-            :class="{ active: entryKey(item) === entryKey(entry) }"
-            @click="store.openDetail(kind, item)"
+          <VirtualScroller
+            v-if="relatedEntries.length"
+            :key="kind + ':' + store.selectedDetail?.entryKey"
+            :items="relatedEntries"
+            :itemSize="64"
+            :numToleratedItems="6"
+            :disabled="relatedEntries.length <= 100"
+            class="related-virtual-list"
+            :class="{ virtualized: relatedEntries.length > 100 }"
+            data-testid="related-connections-list"
           >
-            <span class="protocol" :class="item.protocol.toLowerCase()">{{
-              item.protocol.toUpperCase()
-            }}</span
-            ><span
-              ><b>{{ store.displayFor(item).serviceName }}</b
-              ><code
-                >{{ localEndpoint(item)
-                }}{{
-                  hasRemoteEndpoint(item) ? " → " + remoteEndpoint(item) : ""
-                }}</code
-              ></span
-            ><small>{{
-              item.protocol === "Tcp" ? state(item.state) : "UDP"
-            }}</small>
-          </button>
-          <p v-if="!visibleRelated.length" class="workbench-hint">
-            {{ t("noEndpoints") }}
-          </p>
-          <footer v-if="relatedEntries.length > 100" class="option-pagination">
-            <button :disabled="relatedPage === 0" @click="relatedPage--">
-              {{ t("previousPage") }}</button
-            ><small>{{
-              t("optionPage", {
-                start: relatedPage * 100 + 1,
-                end: Math.min((relatedPage + 1) * 100, relatedEntries.length),
-                count: relatedEntries.length,
-              })
-            }}</small
-            ><button
-              :disabled="(relatedPage + 1) * 100 >= relatedEntries.length"
-              @click="relatedPage++"
+            <template
+              #content="{
+                items,
+                contentRef,
+                styleClass,
+                contentStyle,
+                getItemOptions,
+              }"
             >
-              {{ t("nextPage") }}
-            </button>
-          </footer>
+              <div :ref="contentRef" :class="styleClass" :style="contentStyle">
+                <button
+                  v-for="(item, index) in items"
+                  :key="entryKey(item)"
+                  class="related-connection"
+                  :class="{ active: entryKey(item) === entryKey(entry) }"
+                  :aria-posinset="
+                    (getItemOptions?.(Number(index))?.index ?? Number(index)) +
+                    1
+                  "
+                  :aria-setsize="relatedEntries.length"
+                  :title="
+                    localEndpoint(item) +
+                    (hasRemoteEndpoint(item)
+                      ? ' → ' + remoteEndpoint(item)
+                      : '')
+                  "
+                  @click="store.openDetail(kind, item)"
+                >
+                  <span class="protocol" :class="item.protocol.toLowerCase()">{{
+                    item.protocol.toUpperCase()
+                  }}</span
+                  ><span
+                    ><b>{{ store.displayFor(item).serviceName }}</b
+                    ><code
+                      >{{ localEndpoint(item)
+                      }}{{
+                        hasRemoteEndpoint(item)
+                          ? " → " + remoteEndpoint(item)
+                          : ""
+                      }}</code
+                    ></span
+                  ><small>{{
+                    item.protocol === "Tcp" ? state(item.state) : "UDP"
+                  }}</small>
+                </button>
+              </div>
+            </template>
+          </VirtualScroller>
+          <p v-else class="workbench-hint">{{ t("noEndpoints") }}</p>
         </section>
       </div>
     </template>
@@ -821,3 +874,40 @@ function terminate() {
     >
   </Dialog>
 </template>
+
+<style scoped>
+.endpoint-address-link {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.endpoint-address-link code {
+  overflow-wrap: anywhere;
+}
+.endpoint-address-link small {
+  font-size: 10px;
+  color: var(--muted);
+}
+.related-virtual-list.virtualized {
+  height: min(60dvh, 560px);
+  overflow: auto;
+}
+.related-connection {
+  height: 64px;
+  min-height: 64px;
+  max-height: 64px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.related-connection code {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>

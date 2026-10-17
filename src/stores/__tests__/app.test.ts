@@ -98,6 +98,32 @@ describe("app store", () => {
 
   afterEach(() => vi.useRealTimers());
 
+  it("should restore the search and both levels of filter logic in a new store", async () => {
+    const store = useAppStore();
+    store.query = "port:3000";
+    store.setFacetFilter("protocol", ["Tcp", "Udp"]);
+    store.updateSettings({
+      filterMode: "any",
+      filterFieldModes: { protocol: "all" },
+    });
+    await nextTick();
+    const saved = JSON.parse(localStorage.getItem("portviewer.settings.v1")!);
+    expect(saved).toMatchObject({
+      schemaVersion: 5,
+      query: "port:3000",
+      facetFilters: { protocol: ["Tcp", "Udp"] },
+      filterMode: "any",
+      filterFieldModes: { protocol: "all" },
+    });
+    store.stop();
+    setActivePinia(createPinia());
+    const restored = useAppStore();
+    expect(restored.query).toBe("port:3000");
+    expect(restored.facetFilters).toEqual({ protocol: ["Tcp", "Udp"] });
+    expect(restored.settings.filterMode).toBe("any");
+    expect(restored.settings.filterFieldModes).toEqual({ protocol: "all" });
+  });
+
   it("coalesces overlapping refresh calls into one IPC request", async () => {
     let release: (value: ScanResult) => void = () => {};
     invokeMock.mockReturnValue(
@@ -700,9 +726,9 @@ describe("app store", () => {
   );
 
   it.each([1000, 10000, 50000, 100000] as const)(
-    "accepts supported maximum entry boundary %i",
+    "should discard the obsolete maximum entry limit %i",
     (maxEntries) => {
-      expect(validateSettings({ maxEntries }).maxEntries).toBe(maxEntries);
+      expect(validateSettings({ maxEntries })).not.toHaveProperty("maxEntries");
     },
   );
 
@@ -720,7 +746,7 @@ describe("app store", () => {
       visibleColumns: ["local_port", "process_name"],
     });
 
-    expect(settings.schemaVersion).toBe(4);
+    expect(settings.schemaVersion).toBe(5);
     expect(settings.visibleColumns).toEqual([
       "service_name",
       "service_description",
@@ -856,18 +882,23 @@ describe("app store", () => {
     expect(store.canRequestElevation).toBe(false);
   });
 
-  it("limits the searchable and exportable view without deleting the scan snapshot", () => {
+  it("should keep every endpoint searchable even when migrated settings contained a lower maximum", () => {
+    localStorage.setItem(
+      "portviewer.settings.v1",
+      JSON.stringify({ schemaVersion: 4, maxEntries: 1000 }),
+    );
+    setActivePinia(createPinia());
     const store = useAppStore();
     store.entries = Array.from({ length: 1001 }, (_, index) =>
       entry({ local_port: index, pid: index + 10 }),
     );
     store.totalCount = 1001;
-    store.updateSettings({ maxEntries: 1000 });
-
     expect(store.entries).toHaveLength(1001);
-    expect(store.limitedEntries).toHaveLength(1000);
-    expect(store.viewEntries).toHaveLength(1000);
-    expect(store.isTruncated).toBe(true);
+    expect(store.limitedEntries).toHaveLength(1001);
+    expect(store.viewEntries).toHaveLength(1001);
+    expect(store.isTruncated).toBe(false);
+    store.query = "port:1000";
+    expect(store.viewEntries).toEqual([store.entries[1000]]);
   });
 
   it("clears query and filters while preserving the explicit sort", () => {
@@ -896,7 +927,7 @@ describe("app store", () => {
     expect(invokeMock).toHaveBeenCalledWith("save_export", {
       suggestedName: expect.stringMatching(/^PortViewer_\d{8}\d{6}\.csv$/),
       contents: expect.stringContaining(
-        "\uFEFF服务中文名,服务描述,本地端口,本地地址",
+        "\uFEFF服务中文名,进程名,归属类型,归属名称",
       ),
       format: "csv",
     });
@@ -971,5 +1002,96 @@ describe("app store", () => {
     expect(exported.metadata.sort).toEqual([
       { field: "local_port", order: -1 },
     ]);
+  });
+  it("should save all view adjustments and restore them without changing the scan data", async () => {
+    const store = useAppStore();
+    store.entries = [entry()];
+    store.query = "node";
+    store.setFacetFilter("service_manager", ["Docker", "Systemd"]);
+    store.protocols = ["Tcp"];
+    store.states = ["Listen"];
+    store.setGroupBy("service_manager");
+    store.setSortSpecs([{ field: "local_port", order: -1 }]);
+    store.updateSettings({
+      visibleColumns: ["process_name", "local_port"],
+      columnOrder: [
+        "process_name",
+        "local_port",
+        ...store.settings.columnOrder.filter(
+          (field) => field !== "process_name" && field !== "local_port",
+        ),
+      ],
+      columnWidths: { local_port: 111 },
+      columnSizing: "manual",
+      density: "comfortable",
+      filterMode: "any",
+      filterFieldModes: { service_manager: "all" },
+      colorRules: [
+        {
+          id: "saved",
+          enabled: true,
+          color: "red",
+          filters: { protocol: ["Tcp"] },
+          mode: "any",
+          fieldModes: { protocol: "all" },
+          target: { kind: "columns", fields: ["local_port"] },
+        },
+      ],
+      groupExpansion: { defaultExpanded: false, exceptions: ['["Docker"]'] },
+    });
+    await nextTick();
+    const expected = structuredClone(
+      JSON.parse(JSON.stringify(store.settings)),
+    );
+    store.stop();
+    setActivePinia(createPinia());
+    const restored = useAppStore();
+    expect(restored.settings).toEqual(expected);
+    expect(restored.query).toBe("node");
+    expect(restored.protocols).toEqual(["Tcp"]);
+    expect(restored.states).toEqual(["Listen"]);
+    expect(restored.groupBy).toBe("service_manager");
+    expect(restored.sortSpecs).toEqual([{ field: "local_port", order: -1 }]);
+    expect(restored.entries).toEqual([]);
+  });
+
+  it("should combine protocol and state aliases with facet fields under the selected outer mode", () => {
+    const tcp = entry({ pid: 1 });
+    const udp = entry({ pid: 2, protocol: "Udp", state: null });
+    const established = entry({ pid: 3, state: "Established" });
+    const store = useAppStore();
+    store.entries = [tcp, udp, established];
+    store.protocols = ["Udp"];
+    store.states = ["Listen"];
+    store.updateSettings({ filterMode: "any" });
+    expect(store.viewEntries.map((row) => row.pid)).toEqual([1, 2]);
+    store.updateSettings({ filterMode: "all" });
+    expect(store.viewEntries).toEqual([]);
+  });
+
+  it("should export the selected condition modes with the complete view", async () => {
+    const store = useAppStore();
+    store.entries = [
+      entry(),
+      entry({ pid: 43, local_port: 3001, protocol: "Udp", state: null }),
+    ];
+    store.setFacetFilter("protocol", ["Tcp", "Udp"]);
+    store.updateSettings({
+      filterMode: "any",
+      filterFieldModes: { protocol: "any" },
+    });
+    invokeMock.mockResolvedValue("export.json");
+    await store.download("json");
+    const args = invokeMock.mock.calls.find(
+      ([command]) => command === "save_export",
+    )?.[1];
+    const exported = JSON.parse(args.contents);
+    expect(exported.entries).toHaveLength(2);
+    expect(exported.metadata.filters).toMatchObject({
+      mode: "any",
+      fieldModes: { protocol: "any" },
+      facets: { protocol: ["Tcp", "Udp"] },
+    });
+    expect(exported.metadata.truncated).toBe(false);
   });
 });

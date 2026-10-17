@@ -1,5 +1,10 @@
 import type { PortColumnField, SortSpec } from "./port";
-import type { FacetField, FacetFilters } from "../domain/portFacets";
+import type {
+  FacetField,
+  FacetFilters,
+  ConditionMode,
+  FacetFieldModes,
+} from "../domain/portFacets";
 export type ThemeOption = "light" | "dark" | "system";
 export type LanguageOption = "system" | "zh-CN" | "en-US";
 export type TableDensity = "compact" | "standard" | "comfortable";
@@ -16,15 +21,21 @@ export interface PortColorRule {
   id: string;
   enabled: boolean;
   filters: FacetFilters;
+  mode?: ConditionMode;
+  fieldModes?: FacetFieldModes;
   target: { kind: "row" } | { kind: "columns"; fields: PortColumnField[] };
   color: PortColor;
 }
 export interface AppSettings {
-  schemaVersion: 4;
+  schemaVersion: 5;
+  query: string;
+  facetFilters: FacetFilters;
+  filterMode: ConditionMode;
+  filterFieldModes: FacetFieldModes;
+  groupExpansion: { defaultExpanded: boolean; exceptions: string[] };
   refreshIntervalMs: 0 | 1000 | 2000 | 5000 | 10000 | 30000 | 60000;
   theme: ThemeOption;
   language: LanguageOption;
-  maxEntries: 1000 | 10000 | 50000 | 100000;
   scanOnStartup: boolean;
   density: TableDensity;
   visibleColumns: PortColumnField[];
@@ -58,7 +69,7 @@ export const ALL_COLUMN_FIELDS: ReadonlyArray<PortColumnField> = [
   "process_path",
   "process_created_at",
 ];
-export const DEFAULT_VISIBLE_COLUMNS: PortColumnField[] = [
+export const LEGACY_V4_VISIBLE_COLUMNS: PortColumnField[] = [
   "service_name",
   "service_description",
   "protocol",
@@ -74,7 +85,7 @@ export const DEFAULT_VISIBLE_COLUMNS: PortColumnField[] = [
   "pid",
   "process_name",
 ];
-export const DEFAULT_COLUMN_ORDER: PortColumnField[] = [
+export const LEGACY_V4_COLUMN_ORDER: PortColumnField[] = [
   "service_name",
   "service_description",
   "local_port",
@@ -96,6 +107,27 @@ export const DEFAULT_COLUMN_ORDER: PortColumnField[] = [
   "attribution_confidence",
   "process_status",
   "process_created_at",
+];
+export const DEFAULT_VISIBLE_COLUMNS: PortColumnField[] = [
+  "service_name",
+  "process_name",
+  "attribution_kind",
+  "attribution",
+  "state",
+  "protocol",
+  "local_address",
+  "local_port",
+  "role",
+  "remote_host",
+  "remote_address",
+  "remote_port",
+  "service_description",
+];
+export const DEFAULT_COLUMN_ORDER: PortColumnField[] = [
+  ...DEFAULT_VISIBLE_COLUMNS,
+  ...ALL_COLUMN_FIELDS.filter(
+    (field) => !DEFAULT_VISIBLE_COLUMNS.includes(field),
+  ),
 ];
 export const COLUMN_WIDTH_LIMITS: Record<
   PortColumnField,
@@ -122,11 +154,15 @@ export const COLUMN_WIDTH_LIMITS: Record<
   ]),
 ) as Record<PortColumnField, { min: number; max: number }>;
 export const DEFAULT_SETTINGS: AppSettings = {
-  schemaVersion: 4,
+  schemaVersion: 5,
+  query: "",
+  facetFilters: {},
+  filterMode: "all",
+  filterFieldModes: {},
+  groupExpansion: { defaultExpanded: true, exceptions: [] },
   refreshIntervalMs: 5000,
   theme: "system",
   language: "system",
-  maxEntries: 50000,
   scanOnStartup: true,
   density: "compact",
   visibleColumns: [...DEFAULT_VISIBLE_COLUMNS],

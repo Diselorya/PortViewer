@@ -9,8 +9,9 @@ import {
 } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import type { ColumnPassThroughMethodOptions } from "primevue/column";
 import type {
-  DataTablePageEvent,
+  DataTableColumnReorderEvent,
   DataTableSortEvent,
 } from "primevue/datatable";
 import { useAppStore } from "../../stores/app";
@@ -20,11 +21,7 @@ import {
   serviceManagerLabel,
 } from "../../domain/attribution";
 import { analyzeConnection } from "../../domain/connectionRelation";
-import {
-  facetGroupKey,
-  facetValues,
-  hasRemoteEndpoint,
-} from "../../domain/portFacets";
+import { facetValues, hasRemoteEndpoint } from "../../domain/portFacets";
 import { columnLabel, facetValueLabel } from "../../domain/portPresentation";
 import { calculateColumnWidths } from "../../domain/tableLayout";
 import { cellColor } from "../../domain/portColor";
@@ -63,83 +60,94 @@ const columns = computed(() =>
 const tableWidth = computed(() =>
   columns.value.reduce((sum, column) => sum + column.width, 0),
 );
-const first = ref(0),
-  rows = ref(100),
-  expandedGroups = ref<string[]>([]),
-  expandNewGroups = ref(true);
-type TableEntry = PortEntry & { __groupKey?: string };
-const tableEntries = computed<TableEntry[]>(() =>
-  store.groupBy
-    ? store.viewEntries
-        .slice(first.value, first.value + rows.value)
-        .map((entry) => ({
-          ...entry,
-          __groupKey: facetGroupKey(entry, store.groupBy!, store.displayFor),
-        }))
-    : store.viewEntries,
-);
-const groupKeys = computed(() => store.entryGroups.map((group) => group.key));
-const groupCounts = computed(
-  () =>
-    new Map(
-      store.entryGroups.map((group) => [group.key, group.entries.length]),
-    ),
-);
-function groupKey(entry: PortEntry) {
-  return store.groupBy
-    ? facetGroupKey(entry, store.groupBy, store.displayFor)
-    : "";
+interface GroupTableRow {
+  __groupRow: true;
+  key: string;
+  label: string;
+  count: number;
+  expanded: boolean;
 }
-function groupLabel(entry: PortEntry) {
-  return store.groupBy
-    ? facetValues(entry, store.groupBy, store.displayFor)
-        .map((value) => facetValueLabel(store.groupBy!, value, locale.value))
-        .join(" + ")
-    : "";
+type TableRow = PortEntry | GroupTableRow;
+function isGroupRow(row: TableRow): row is GroupTableRow {
+  return "__groupRow" in row && row.__groupRow === true;
+}
+const groupExceptions = computed(
+  () => new Set(store.settings.groupExpansion.exceptions),
+);
+const tableEntries = computed<TableRow[]>(() => {
+  if (!store.groupBy) return store.viewEntries;
+  const rows: TableRow[] = [];
+  const defaultExpanded = store.settings.groupExpansion.defaultExpanded;
+  const exceptions = groupExceptions.value;
+  for (const group of store.entryGroups) {
+    const expanded = defaultExpanded !== exceptions.has(group.key);
+    const entry = group.entries[0];
+    rows.push({
+      __groupRow: true,
+      key: "group:" + group.key,
+      label: entry
+        ? facetValues(entry, store.groupBy, store.displayFor)
+            .map((value) =>
+              facetValueLabel(store.groupBy!, value, locale.value),
+            )
+            .join(" + ")
+        : "",
+      count: group.entries.length,
+      expanded,
+    });
+    if (expanded) for (const item of group.entries) rows.push(item);
+  }
+  return rows;
+});
+function tableRowKey(row: TableRow) {
+  return isGroupRow(row) ? row.key : entryKey(row);
 }
 function setGroupsExpanded(expanded: boolean) {
-  expandNewGroups.value = expanded;
-  expandedGroups.value = expanded ? [...groupKeys.value] : [];
+  store.updateSettings({
+    groupExpansion: { defaultExpanded: expanded, exceptions: [] },
+  });
 }
-watch(
-  groupKeys,
-  (keys, previous = []) => {
-    const previousKeys = new Set(previous);
-    const expandedKeys = new Set(expandedGroups.value);
-    expandedGroups.value = keys.filter((key) =>
-      previousKeys.has(key) ? expandedKeys.has(key) : expandNewGroups.value,
-    );
-  },
-  { immediate: true },
-);
-watch(
-  () => store.groupBy,
-  () => {
-    setGroupsExpanded(true);
-  },
-);
-watch(
-  [
-    () => store.groupBy,
-    () => store.query,
-    () => JSON.stringify(store.effectiveFacetFilters),
-    () => JSON.stringify(store.sortSpecs),
-  ],
-  () => {
-    first.value = 0;
-  },
-);
-watch(
-  () => store.viewEntries.length,
-  (length) => {
-    if (first.value >= length)
-      first.value =
-        Math.max(0, Math.ceil(length / rows.value) - 1) * rows.value;
-  },
-);
-function onPage(event: DataTablePageEvent) {
-  first.value = event.first;
-  rows.value = event.rows;
+function toggleGroup(row: GroupTableRow) {
+  const key = row.key.slice("group:".length);
+  const exceptions = new Set(groupExceptions.value);
+  if (exceptions.has(key)) exceptions.delete(key);
+  else exceptions.add(key);
+  store.updateSettings({
+    groupExpansion: {
+      defaultExpanded: store.settings.groupExpansion.defaultExpanded,
+      exceptions: [...exceptions],
+    },
+  });
+}
+function bodyCellProps(
+  options: ColumnPassThroughMethodOptions,
+  field: PortColumnField,
+) {
+  const row = options.parent.props.rowData as TableRow;
+  if (!isGroupRow(row)) return { "data-column-field": field };
+  return field === columns.value[0]?.field
+    ? { colspan: columns.value.length, class: "virtual-group-cell" }
+    : { style: { display: "none" }, "aria-hidden": "true" };
+}
+function onColumnReorder(event: DataTableColumnReorderEvent) {
+  const visible = columns.value.map((column) => column.field);
+  if (
+    event.dragIndex < 0 ||
+    event.dropIndex < 0 ||
+    event.dragIndex >= visible.length ||
+    event.dropIndex >= visible.length ||
+    event.dragIndex === event.dropIndex
+  )
+    return;
+  const [field] = visible.splice(event.dragIndex, 1);
+  visible.splice(event.dropIndex, 0, field!);
+  const visibleSet = new Set(visible);
+  let index = 0;
+  store.updateSettings({
+    columnOrder: store.settings.columnOrder.map((item) =>
+      visibleSet.has(item) ? visible[index++]! : item,
+    ),
+  });
 }
 function onSort(event: DataTableSortEvent) {
   const raw =
@@ -160,7 +168,8 @@ function onSort(event: DataTableSortEvent) {
       })) as SortSpec[],
   );
 }
-function select(entry: PortEntry | null) {
+function select(entry: TableRow | null) {
+  if (entry && isGroupRow(entry)) return;
   store.selectEntry(entry);
   if (entry) store.openDetail("service", entry);
 }
@@ -369,36 +378,28 @@ defineExpose({ autoFitColumns, setGroupsExpanded });
     <DataTable
       v-else
       :key="
-        store.groupBy
-          ? 'grouped:' + store.groupBy + ':' + itemSize
-          : 'flat:' + itemSize
+        (store.groupBy ?? 'flat') +
+        ':' +
+        itemSize +
+        ':' +
+        columns.map((column) => column.field).join('|')
       "
       :value="tableEntries"
       :selection="store.selectedEntry"
-      :data-key="entryKey"
+      :data-key="tableRowKey"
+      :row-class="
+        (row: TableRow) => (isGroupRow(row) ? 'virtual-group-row' : undefined)
+      "
       selection-mode="single"
       scrollable
       scroll-height="flex"
-      :virtual-scroller-options="
-        store.groupBy
-          ? undefined
-          : { itemSize, delay: 50, numToleratedItems: 20 }
-      "
+      :virtual-scroller-options="{ itemSize, delay: 50, numToleratedItems: 20 }"
       lazy
-      :paginator="Boolean(store.groupBy)"
-      :first="first"
-      :rows="rows"
-      :rows-per-page-options="[50, 100, 200]"
-      :total-records="store.viewEntries.length"
-      :row-group-mode="store.groupBy ? 'subheader' : undefined"
-      :group-rows-by="store.groupBy ? '__groupKey' : undefined"
-      :expandable-row-groups="Boolean(store.groupBy)"
-      v-model:expanded-row-groups="expandedGroups"
       :multi-sort-meta="store.sortSpecs"
-      :pt="{ rowGroupHeaderCell: { colspan: columns.length } }"
       sort-mode="multiple"
       removable-sort
       size="small"
+      reorderable-columns
       resizable-columns
       column-resize-mode="expand"
       class="port-table connection-table workbench-table"
@@ -407,29 +408,11 @@ defineExpose({ autoFitColumns, setGroupsExpanded });
         minWidth: tableWidth + 'px',
         tableLayout: 'fixed',
       }"
-      @update:selection="select($event as PortEntry)"
+      @update:selection="select($event as TableRow)"
       @sort="onSort"
-      @page="onPage"
+      @column-reorder="onColumnReorder"
       @column-resize-end="onColumnResize"
     >
-      <template v-if="store.groupBy" #header
-        ><div class="group-view-hint" :title="t('groupSetHint')">
-          {{ columnLabel(store.groupBy, locale) }} ·
-          {{ store.entryGroups.length }} {{ t("groupBy") }} ·
-          {{ t("groupPageHint", { count: store.viewEntries.length }) }}
-        </div></template
-      >
-      <template #groupheader="{ data }: { data: PortEntry }"
-        ><span
-          class="port-group-header"
-          data-testid="port-group-header"
-          :data-group-key="groupKey(data)"
-          ><b>{{ groupLabel(data) }}</b
-          ><small>{{
-            t("groupCount", { count: groupCounts.get(groupKey(data)) ?? 0 })
-          }}</small></span
-        ></template
-      >
       <Column
         v-for="column in columns"
         :key="column.field"
@@ -443,7 +426,7 @@ defineExpose({ autoFitColumns, setGroupsExpanded });
         }"
         :pt="{
           headerCell: { 'data-column-field': column.field },
-          bodyCell: { 'data-column-field': column.field },
+          bodyCell: (options) => bodyCellProps(options, column.field),
         }"
       >
         <template #header
@@ -458,8 +441,37 @@ defineExpose({ autoFitColumns, setGroupsExpanded });
             ⋮
           </button></template
         >
-        <template #body="{ data }: { data: PortEntry }">
-          <div class="port-cell" :class="cellClass(data, column.field)">
+        <template #sorticon="{ sorted, sortOrder }">
+          <span v-if="sorted" class="column-sort-arrow" aria-hidden="true">{{
+            sortOrder === 1 ? "↑" : "↓"
+          }}</span>
+        </template>
+        <template #body="{ data }: { data: TableRow }">
+          <button
+            v-if="isGroupRow(data) && column.field === columns[0]?.field"
+            class="port-group-header"
+            data-testid="port-group-header"
+            :data-group-key="data.key.slice('group:'.length)"
+            :aria-expanded="data.expanded"
+            :aria-label="
+              (data.expanded ? t('groupCollapse') : t('groupExpand')) +
+              ' · ' +
+              data.label
+            "
+            @click.stop="toggleGroup(data)"
+            @keydown.stop
+          >
+            <span class="group-toggle-arrow" aria-hidden="true">{{
+              data.expanded ? "⌄" : "›"
+            }}</span>
+            <b>{{ data.label }}</b>
+            <small>{{ t("groupCount", { count: data.count }) }}</small>
+          </button>
+          <div
+            v-else-if="!isGroupRow(data)"
+            class="port-cell"
+            :class="cellClass(data, column.field)"
+          >
             <span
               v-if="column.field === 'protocol'"
               class="protocol"
@@ -609,8 +621,7 @@ defineExpose({ autoFitColumns, setGroupsExpanded });
               @click.stop="store.openDetail('service', data)"
               @keydown.stop
             >
-              <b>{{ store.displayFor(data).serviceName }}</b
-              ><small>{{ actualName(data) }}</small>
+              {{ backendText(locale, actualName(data)) || t("unavailable") }}
             </button>
             <span
               v-else

@@ -45,13 +45,13 @@ describe("exports", () => {
   it("exports an empty view as a BOM-prefixed header without a phantom row", () => {
     const csv = createCsv([], ["local_port", "pid"]);
 
-    expect(csv).toBe("\uFEFF本地端口,PID");
+    expect(csv).toBe("\uFEFF本地端口号,PID");
   });
 
   it("preserves caller-selected column order", () => {
     const csv = createCsv([entry()], ["pid", "local_address", "protocol"]);
 
-    expect(csv).toBe("\uFEFFPID,本地地址,协议\r\n9,::,Udp");
+    expect(csv).toBe("\uFEFFPID,监听地址,协议类型\r\n9,::,Udp");
   });
 
   it("quotes a protected formula when the original field also contains a comma", () => {
@@ -93,7 +93,7 @@ describe("exports", () => {
     expect(json.entries.map((item: PortEntry) => item.pid)).toEqual([2, 1]);
   });
 
-  it("exports every attribution candidate to CSV and the structured evidence to JSON", () => {
+  it("should export a compact actual workload name to CSV and retain every candidate and fact in JSON", () => {
     const attributed = entry({
       attributions: [
         {
@@ -115,14 +115,7 @@ describe("exports", () => {
       ],
     });
     const csv = createCsv([attributed], ["attribution"]);
-    expect(csv).toContain("Nginx 站点: api.example.test");
-    expect(csv).toContain("NSSM 服务: Gateway Service");
-    expect(csv).toContain("Nginx 虚拟主机, 业务 API\nHTTPS gateway");
-    expect(csv).toContain("监听: *:443");
-    expect(csv).toContain("服务名: gateway");
-    expect(csv).toContain("证据: nginx.conf");
-    expect(csv).toContain("可信度: 高可信");
-    expect(csv.split("\r\n")[1]?.startsWith('"')).toBe(true);
+    expect(csv).toBe("\uFEFF归属名称\r\napi.example.test");
 
     const json = JSON.parse(
       createJson([attributed], {
@@ -136,6 +129,7 @@ describe("exports", () => {
     );
     expect(json.schemaVersion).toBe(2);
     expect(json.entries[0].attributions).toHaveLength(2);
+    expect(json.entries[0].attributions[1].name).toBe("Gateway Service");
     expect(json.entries[0].attributions[0].facts[0]).toEqual({
       label: "监听",
       value: "*:443",

@@ -10,12 +10,11 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         codeSplitting: {
+          // Keep Vue and PrimeVue initialization together; size splits can create component-registration cycles.
           groups: [
             {
               name: "vendor",
               test: /node_modules/,
-              minSize: 20_000,
-              maxSize: 450_000,
               priority: 10,
             },
           ],

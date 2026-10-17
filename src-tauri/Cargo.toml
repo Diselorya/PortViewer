@@ -1,6 +1,6 @@
 [package]
 name = "portviewer-app"
-version = "1.3.0"
+version = "1.4.0"
 description = "PortViewer - Windows network port monitoring tool"
 authors = ["PortViewer Team"]
 license = "MIT"

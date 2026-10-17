@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import VirtualScroller from "primevue/virtualscroller";
 import {
   FACET_FIELDS,
   facetOptions,
   type FacetField,
   type FacetFilters,
+  type ConditionMode,
+  type FacetFieldModes,
 } from "../../domain/portFacets";
 import { columnLabel, facetValueLabel } from "../../domain/portPresentation";
 import type { EntryDisplayResolver } from "../../domain/serviceKnowledge";
@@ -14,15 +17,19 @@ import { useI18n } from "../../i18n";
 const props = defineProps<{
   modelValue: FacetFilters;
   initialField?: FacetField;
+  mode?: ConditionMode;
+  fieldModes?: FacetFieldModes;
   entries: PortEntry[];
   displayFor?: EntryDisplayResolver;
 }>();
-const emit = defineEmits<{ "update:modelValue": [value: FacetFilters] }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: FacetFilters];
+  "update:mode": [value: ConditionMode];
+  "update:fieldModes": [value: FacetFieldModes];
+}>();
 const { locale, t } = useI18n();
 const field = ref<FacetField>(props.initialField ?? "state"),
-  search = ref(""),
-  page = ref(0);
-const pageSize = 100;
+  search = ref("");
 watch(
   () => props.initialField,
   (value) => {
@@ -30,6 +37,7 @@ watch(
   },
 );
 const selected = computed(() => props.modelValue[field.value] ?? []);
+const selectedValues = computed(() => new Set(selected.value));
 const activeFields = computed(() =>
   FACET_FIELDS.filter((value) => props.modelValue[value]?.length),
 );
@@ -48,24 +56,12 @@ const options = computed(() => {
         .includes(needle),
   );
 });
-const visibleOptions = computed(() =>
-  options.value.slice(page.value * pageSize, (page.value + 1) * pageSize),
-);
-watch([field, search], () => {
-  page.value = 0;
-});
 watch(field, () => {
   search.value = "";
 });
-watch(
-  () => options.value.length,
-  (length) => {
-    page.value = Math.min(
-      page.value,
-      Math.max(0, Math.ceil(length / pageSize) - 1),
-    );
-  },
-);
+function changeFieldMode(target: FacetField, mode: ConditionMode) {
+  emit("update:fieldModes", { ...props.fieldModes, [target]: mode });
+}
 function change(target: FacetField, values: string[]) {
   const filters = { ...props.modelValue };
   if (values.length) filters[target] = values;
@@ -75,7 +71,7 @@ function change(target: FacetField, values: string[]) {
 function toggle(value: string) {
   change(
     field.value,
-    selected.value.includes(value)
+    selectedValues.value.has(value)
       ? selected.value.filter((item) => item !== value)
       : [...selected.value, value],
   );
@@ -84,7 +80,23 @@ function toggle(value: string) {
 
 <template>
   <div class="facet-condition-editor" data-testid="facet-values">
-    <p class="workbench-hint">{{ t("allConditions") }}</p>
+    <label class="condition-mode-label">
+      {{ t("conditionGroupMode") }}
+      <select
+        :value="mode ?? 'all'"
+        :aria-label="t('conditionGroupMode')"
+        data-testid="condition-group-mode"
+        @change="
+          emit(
+            'update:mode',
+            ($event.target as HTMLSelectElement).value as ConditionMode,
+          )
+        "
+      >
+        <option value="all">{{ t("allConditions") }}</option>
+        <option value="any">{{ t("anyCondition") }}</option>
+      </select>
+    </label>
     <div v-if="activeFields.length" class="condition-list">
       <div v-for="value in activeFields" :key="value" class="condition-row">
         <button
@@ -94,7 +106,23 @@ function toggle(value: string) {
         >
           {{ columnLabel(value, locale) }}
         </button>
-        <span class="condition-operator">{{ t("containsAny") }}</span>
+        <select
+          class="condition-operator"
+          :value="fieldModes?.[value] ?? 'any'"
+          :aria-label="
+            t('conditionFieldMode') + ' · ' + columnLabel(value, locale)
+          "
+          :data-condition-field="value"
+          @change="
+            changeFieldMode(
+              value,
+              ($event.target as HTMLSelectElement).value as ConditionMode,
+            )
+          "
+        >
+          <option value="any">{{ t("containsAny") }}</option>
+          <option value="all">{{ t("containsAll") }}</option>
+        </select>
         <button
           class="condition-values"
           @click="field = value"
@@ -148,44 +176,34 @@ function toggle(value: string) {
         :aria-label="t('filterValueSearch')"
         :placeholder="t('filterValueSearch')"
       />
-      <div class="workbench-facet-options">
-        <label
-          v-for="option in visibleOptions"
-          :key="option.value"
-          :title="facetValueLabel(field, option.value, locale)"
-        >
-          <input
-            type="checkbox"
-            :checked="selected.includes(option.value)"
-            :value="option.value"
-            :data-testid="`facet-option-${option.value}`"
-            :data-facet-field="field"
-            @change="toggle(option.value)"
-          />
-          <span>{{ facetValueLabel(field, option.value, locale) }}</span
-          ><small>{{ option.count }}</small>
-        </label>
-        <p v-if="!visibleOptions.length" class="workbench-hint">
-          {{ t("noFilterValues") }}
-        </p>
-      </div>
-      <footer v-if="options.length > pageSize" class="option-pagination">
-        <button :disabled="page === 0" @click="page--">
-          {{ t("previousPage") }}</button
-        ><small>{{
-          t("optionPage", {
-            start: page * pageSize + 1,
-            end: Math.min((page + 1) * pageSize, options.length),
-            count: options.length,
-          })
-        }}</small
-        ><button
-          :disabled="(page + 1) * pageSize >= options.length"
-          @click="page++"
-        >
-          {{ t("nextPage") }}
-        </button>
-      </footer>
+      <VirtualScroller
+        v-if="options.length"
+        :key="field + ':' + search"
+        :items="options"
+        :item-size="29"
+        :num-tolerated-items="8"
+        class="workbench-facet-options"
+        :style="{ height: Math.min(options.length * 29, 240) + 'px' }"
+      >
+        <template #item="{ item: option }">
+          <label
+            class="facet-option"
+            :title="facetValueLabel(field, option.value, locale)"
+          >
+            <input
+              type="checkbox"
+              :checked="selectedValues.has(option.value)"
+              :value="option.value"
+              :data-testid="`facet-option-${option.value}`"
+              :data-facet-field="field"
+              @change="toggle(option.value)"
+            />
+            <span>{{ facetValueLabel(field, option.value, locale) }}</span>
+            <small>{{ option.count }}</small>
+          </label>
+        </template>
+      </VirtualScroller>
+      <p v-else class="workbench-hint">{{ t("noFilterValues") }}</p>
     </div>
   </div>
 </template>

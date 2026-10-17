@@ -1,5 +1,5 @@
 import {
-  attributionLabel,
+  primaryAttribution,
   attributionSearchText,
   serviceManager,
   serviceManagerLabel,
@@ -9,7 +9,8 @@ import {
   facetValues,
   hasRemoteEndpoint,
   type FacetFilters,
-  type FacetField,
+  createFacetMatcher,
+  type FacetConditionOptions,
 } from "./portFacets";
 import type { PortColumnField, PortEntry, SortSpec } from "../types/port";
 import { displayField, type EntryDisplayResolver } from "./serviceKnowledge";
@@ -129,7 +130,8 @@ export function fieldValue(
 ): unknown {
   const displayValue = displayField(entry, field, displayFor);
   if (displayValue !== undefined) return displayValue;
-  if (field === "attribution") return attributionLabel(entry);
+  if (field === "attribution")
+    return primaryAttribution(entry)?.name ?? entry.process_name ?? "";
   if (field === "service_manager") return serviceManager(entry);
   if (field === "role") return analyzeConnection(entry).role;
   if (
@@ -149,25 +151,18 @@ export function queryEntries(
   sort: SortSpec[],
   facets: FacetFilters = {},
   displayFor?: EntryDisplayResolver,
+  options: FacetConditionOptions = {},
 ): PortEntry[] {
-  const tokens = parseQuery(query),
-    ps = new Set(protocols),
-    ss = new Set(states),
-    facetSets = Object.entries(facets)
-      .filter(([, values]) => values?.length)
-      .map(
-        ([field, values]) => [field as FacetField, new Set(values)] as const,
-      );
+  const tokens = parseQuery(query);
+  const combined = { ...facets };
+  if (protocols.length) combined.protocol = protocols;
+  if (states.length) combined.state = states;
+  const matchesFacets = createFacetMatcher(combined, displayFor, options);
   return entries
     .filter(
-      (e) =>
-        (!ps.size || ps.has(e.protocol)) &&
-        (!ss.size ||
-          (e.protocol === "Tcp" && e.state !== null && ss.has(e.state))) &&
-        facetSets.every(([field, values]) =>
-          facetValues(e, field, displayFor).some((value) => values.has(value)),
-        ) &&
-        tokens.every((t) => matches(e, t, displayFor)),
+      (entry) =>
+        matchesFacets(entry) &&
+        tokens.every((token) => matches(entry, token, displayFor)),
     )
     .map((entry, index) => ({
       entry,

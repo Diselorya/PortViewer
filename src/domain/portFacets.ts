@@ -22,6 +22,12 @@ export const FACET_FIELDS = [
 ] as const;
 export type FacetField = (typeof FACET_FIELDS)[number];
 export type FacetFilters = Partial<Record<FacetField, string[]>>;
+export type ConditionMode = "all" | "any";
+export type FacetFieldModes = Partial<Record<FacetField, ConditionMode>>;
+export interface FacetConditionOptions {
+  mode?: ConditionMode;
+  fieldModes?: FacetFieldModes;
+}
 export const NO_VALUE = "__none__";
 export const UNIDENTIFIED = "__unidentified__";
 
@@ -162,20 +168,41 @@ export function facetOptions(
     .map(([value, count]) => ({ value, count }));
 }
 
+/** Compile only active fields once, so full views do not rebuild selected sets per row. */
+export function createFacetMatcher(
+  filters: FacetFilters,
+  displayFor?: EntryDisplayResolver,
+  options: FacetConditionOptions = {},
+): (entry: PortEntry) => boolean {
+  const conditions = FACET_FIELDS.filter((field) => filters[field]?.length).map(
+    (field) => ({
+      field,
+      selected: new Set(filters[field]),
+      all: options.fieldModes?.[field] === "all",
+    }),
+  );
+  if (!conditions.length) return () => true;
+  const matches = (
+    entry: PortEntry,
+    condition: (typeof conditions)[number],
+  ) => {
+    const actual = facetValues(entry, condition.field, displayFor);
+    return condition.all
+      ? [...condition.selected].every((value) => actual.includes(value))
+      : actual.some((value) => condition.selected.has(value));
+  };
+  return options.mode === "any"
+    ? (entry) => conditions.some((condition) => matches(entry, condition))
+    : (entry) => conditions.every((condition) => matches(entry, condition));
+}
+
 export function matchesFacetFilters(
   entry: PortEntry,
   filters: FacetFilters,
   displayFor?: EntryDisplayResolver,
+  options: FacetConditionOptions = {},
 ): boolean {
-  return FACET_FIELDS.every((field) => {
-    const selected = filters[field];
-    return (
-      !selected?.length ||
-      facetValues(entry, field, displayFor).some((value) =>
-        selected.includes(value),
-      )
-    );
-  });
+  return createFacetMatcher(filters, displayFor, options)(entry);
 }
 
 /** Multi-valued evidence forms one set-valued group so endpoints never duplicate. */

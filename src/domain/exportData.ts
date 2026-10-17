@@ -4,57 +4,34 @@ import {
   displayField,
   type EntryDisplayResolver,
 } from "./serviceKnowledge";
-import {
-  attributionDetails,
-  attributionLabel,
-  serviceManager,
-} from "./attribution";
+import { primaryAttribution, serviceManager } from "./attribution";
 import { analyzeConnection } from "./connectionRelation";
 import {
   facetValues,
   hasRemoteEndpoint,
   type FacetField,
   type FacetFilters,
+  type ConditionMode,
+  type FacetFieldModes,
 } from "./portFacets";
+import { DEFAULT_COLUMN_ORDER } from "../types/settings";
 export type ExportColumn = PortColumnField;
-export const EXPORT_COLUMNS: ExportColumn[] = [
-  "service_name",
-  "service_description",
-  "protocol",
-  "ip_version",
-  "local_address",
-  "local_host",
-  "local_port",
-  "role",
-  "remote_address",
-  "remote_host",
-  "remote_port",
-  "state",
-  "service_manager",
-  "attribution",
-  "attribution_kind",
-  "attribution_confidence",
-  "process_status",
-  "pid",
-  "process_name",
-  "process_path",
-  "process_created_at",
-];
+export const EXPORT_COLUMNS: ExportColumn[] = [...DEFAULT_COLUMN_ORDER];
 const HEADERS: Record<string, string> = {
   service_name: "服务中文名",
   service_description: "服务描述",
   local_host: "本机名称",
   remote_host: "对端机器名",
-  protocol: "协议",
+  protocol: "协议类型",
   ip_version: "IP 版本",
-  local_address: "本地地址",
-  local_port: "本地端口",
-  role: "方向/角色",
-  remote_address: "远程地址",
-  remote_port: "远程端口",
+  local_address: "监听地址",
+  local_port: "本地端口号",
+  role: "方向",
+  remote_address: "对端地址",
+  remote_port: "对端端口号",
   state: "TCP 状态",
   service_manager: "上级服务",
-  attribution: "服务归属",
+  attribution: "归属名称",
   attribution_kind: "归属类型",
   attribution_confidence: "归属可信度",
   process_status: "进程状态",
@@ -86,13 +63,7 @@ export function createCsv(
         )
           return "—";
         if (c === "attribution")
-          return escapeCsv(
-            e.attributions?.length
-              ? e.attributions
-                  .map((item) => attributionDetails(item))
-                  .join("\n\n")
-              : attributionLabel(e),
-          );
+          return escapeCsv(primaryAttribution(e)?.name ?? e.process_name ?? "");
         if (c === "service_manager") return escapeCsv(serviceManager(e));
         if (c === "role") return escapeCsv(analyzeConnection(e).role);
         if (c === "attribution_kind" || c === "attribution_confidence")
@@ -112,6 +83,8 @@ export interface ExportMetadata {
     protocols: string[];
     states: string[];
     facets?: FacetFilters;
+    mode?: ConditionMode;
+    fieldModes?: FacetFieldModes;
   };
   groupBy?: FacetField | null;
   sort?: SortSpec[];

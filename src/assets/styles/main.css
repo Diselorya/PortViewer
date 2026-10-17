@@ -1508,8 +1508,24 @@ details.menu > summary {
 .condition-field.active {
   color: var(--accent);
 }
+.condition-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.condition-mode-label select {
+  padding: 4px 6px;
+  color: var(--text);
+}
 .condition-operator {
   flex: none;
+  min-width: 0;
+  padding: 4px 3px;
+  border-color: transparent;
+  background: transparent;
   color: var(--muted);
   font-size: 11px;
 }
@@ -1557,25 +1573,27 @@ details.menu > summary {
   overflow: auto;
   margin-top: 7px;
 }
-.workbench-facet-options > label {
+.workbench-facet-options .facet-option {
   display: flex;
   align-items: center;
   gap: 8px;
+  height: 29px;
   min-height: 29px;
   padding: 3px 5px;
+  box-sizing: border-box;
   border-radius: 3px;
   cursor: pointer;
 }
-.workbench-facet-options > label:hover {
+.workbench-facet-options .facet-option:hover {
   background: var(--hover);
 }
-.workbench-facet-options > label > span {
+.workbench-facet-options .facet-option > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
-.workbench-facet-options > label > input {
+.workbench-facet-options .facet-option > input {
   margin: 0;
   flex: none;
 }
@@ -1584,23 +1602,6 @@ details.menu > summary {
   padding-left: 8px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
-}
-.option-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding-top: 9px;
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-}
-.option-pagination small {
-  color: var(--muted);
-  font-size: 11px;
-}
-.option-pagination button {
-  min-height: 27px;
-  padding: 3px 7px;
 }
 .sort-rule {
   display: grid;
@@ -1969,27 +1970,53 @@ button.endpoint-action {
   border-left: 3px solid var(--accent);
   padding-left: 5px;
 }
-.port-table.workbench-table.p-datatable
-  .p-datatable-tbody
-  > tr.p-datatable-row-group-header,
-.port-table.workbench-table.p-datatable
-  .p-datatable-tbody
-  > tr.p-datatable-row-group-header
-  > td {
-  height: 34px;
+.column-sort-arrow {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1;
+}
+.workbench-table
+  th[data-p-reorderable-column="true"]
+  .p-datatable-column-title {
+  cursor: grab;
 }
 .port-table.workbench-table.p-datatable
   .p-datatable-tbody
-  > tr.p-datatable-row-group-header
-  > td {
-  padding: 4px 8px;
+  > tr.virtual-group-row
+  > td.virtual-group-cell {
   background: var(--subtle);
 }
+.port-table.workbench-table.p-datatable
+  .p-datatable-tbody
+  > tr.virtual-group-row
+  > td.virtual-group-cell:first-child {
+  padding: 0;
+}
 .port-group-header {
-  display: inline-flex;
-  gap: 10px;
+  display: flex;
+  width: 100%;
+  height: calc(var(--workload-row) - 1px);
   align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
   font-size: 12px;
+  overflow: hidden;
+}
+.port-group-header b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-toggle-arrow {
+  width: 12px;
+  flex: none;
+  font-size: 16px;
+  color: var(--muted);
 }
 .port-group-header small {
   color: var(--muted);

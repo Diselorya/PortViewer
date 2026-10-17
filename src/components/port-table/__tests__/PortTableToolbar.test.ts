@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { defineComponent, h } from "vue";
 import Toolbar from "../PortTableToolbar.vue";
 import { useAppStore } from "../../../stores/app";
 import { FACET_FIELDS } from "../../../domain/portFacets";
@@ -8,8 +9,21 @@ import { port } from "../../../domain/__tests__/workbenchFixtures";
 const tcp = port(),
   udp = port({ protocol: "Udp", local_port: 53, state: null });
 let wrappers: VueWrapper[] = [];
+// jsdom has no layout viewport. Browser tests cover the real scrolling behavior.
+const VirtualScrollerStub = defineComponent({
+  props: ["items"],
+  setup(props, { slots }) {
+    return () =>
+      h(
+        "div",
+        props.items?.map((item: unknown) => slots.item?.({ item })),
+      );
+  },
+});
 function render() {
-  const wrapper = mount(Toolbar);
+  const wrapper = mount(Toolbar, {
+    global: { stubs: { VirtualScroller: VirtualScrollerStub } },
+  });
   wrappers.push(wrapper);
   return wrapper;
 }
@@ -25,12 +39,21 @@ async function chooseFilter(wrapper: VueWrapper, field: string, value: string) {
 
 describe("PortTableToolbar", () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
     localStorage.clear();
     setActivePinia(createPinia());
     wrappers = [];
   });
   afterEach(() => {
     for (const wrapper of wrappers) wrapper.unmount();
+    vi.unstubAllGlobals();
   });
   it("should combine filter conditions and clear them without changing sorts", async () => {
     const store = useAppStore();
@@ -47,6 +70,44 @@ describe("PortTableToolbar", () => {
     expect(store.activeFilterCount).toBe(0);
     expect(store.viewEntries).toHaveLength(2);
     expect(store.sortSpecs).toEqual([{ field: "pid", order: -1 }]);
+  });
+  it("should switch outer conditions and inner multi-value conditions independently", async () => {
+    const store = useAppStore();
+    store.entries = [tcp, udp];
+    const wrapper = render();
+    await open(wrapper, "filters");
+    await chooseFilter(wrapper, "protocol", "Tcp");
+    await chooseFilter(wrapper, "protocol", "Udp");
+    await chooseFilter(wrapper, "state", "Listen");
+    expect(store.viewEntries).toEqual([tcp]);
+    expect(
+      wrapper.get<HTMLSelectElement>('[data-condition-field="protocol"]')
+        .element.value,
+    ).toBe("any");
+    await wrapper.get('[data-condition-field="protocol"]').setValue("all");
+    expect(store.viewEntries).toEqual([]);
+    await wrapper.get('[data-testid="condition-group-mode"]').setValue("any");
+    expect(store.viewEntries).toEqual([tcp]);
+    await wrapper.get('[data-condition-field="protocol"]').setValue("any");
+    expect(store.viewEntries).toEqual([tcp, udp]);
+    expect(store.settings).toMatchObject({
+      filterMode: "any",
+      filterFieldModes: { protocol: "any" },
+    });
+  });
+  it("should preserve any semantics for multiple states when no inner mode is configured", async () => {
+    const established = port({ local_port: 8081, state: "Established" });
+    const store = useAppStore();
+    store.entries = [tcp, established, udp];
+    const wrapper = render();
+    await open(wrapper, "filters");
+    await chooseFilter(wrapper, "state", "Listen");
+    await chooseFilter(wrapper, "state", "Established");
+    expect(
+      wrapper.get<HTMLSelectElement>('[data-condition-field="state"]').element
+        .value,
+    ).toBe("any");
+    expect(store.viewEntries).toEqual([tcp, established]);
   });
   it("should show only the requested floating panel and close it with Escape", async () => {
     const wrapper = render();

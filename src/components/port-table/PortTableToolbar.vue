@@ -8,7 +8,7 @@ import {
   watch,
 } from "vue";
 import { useAppStore } from "../../stores/app";
-import { ALL_COLUMN_FIELDS } from "../../types/settings";
+import { ALL_COLUMN_FIELDS, DEFAULT_COLUMN_ORDER } from "../../types/settings";
 import type { PortColumnField, SortSpec } from "../../types/port";
 import {
   FACET_FIELDS,
@@ -105,8 +105,7 @@ function escape(event: KeyboardEvent) {
 onMounted(() => document.addEventListener("pointerdown", outside));
 onBeforeUnmount(() => document.removeEventListener("pointerdown", outside));
 function applyFilters(filters: FacetFilters) {
-  for (const field of FACET_FIELDS)
-    store.setFacetFilter(field, filters[field] ?? []);
+  store.setFacetFilters(filters);
 }
 function toggleFacet(field: FacetField, value: string) {
   const selected = store.effectiveFacetFilters[field] ?? [];
@@ -242,9 +241,13 @@ function groupChange(event: Event) {
           v-if="activePanel === 'filters'"
           :initial-field="initialFilterField"
           :model-value="store.effectiveFacetFilters"
+          :mode="store.filterMode"
+          :field-modes="store.filterFieldModes"
           :entries="store.entries"
           :display-for="store.displayFor"
           @update:model-value="applyFilters"
+          @update:mode="store.setFilterMode"
+          @update:field-modes="store.setFilterFieldModes"
         />
         <div v-else-if="activePanel === 'group'" class="group-panel">
           <label
@@ -387,7 +390,7 @@ function groupChange(event: Event) {
             ><button
               class="text-btn"
               @click="
-                store.updateSettings({ columnOrder: [...ALL_COLUMN_FIELDS] })
+                store.updateSettings({ columnOrder: [...DEFAULT_COLUMN_ORDER] })
               "
             >
               {{ t("resetColumns") }}

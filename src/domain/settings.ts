@@ -1,9 +1,16 @@
-import { FACET_FIELDS, type FacetFilters } from "./portFacets";
+import {
+  FACET_FIELDS,
+  type FacetFilters,
+  type ConditionMode,
+  type FacetFieldModes,
+} from "./portFacets";
 import type { PortColumnField, SortSpec } from "../types/port";
 import {
   ALL_COLUMN_FIELDS,
   COLUMN_WIDTH_LIMITS,
   DEFAULT_SETTINGS,
+  LEGACY_V4_COLUMN_ORDER,
+  LEGACY_V4_VISIBLE_COLUMNS,
   PORT_COLORS,
   type AppSettings,
   type PortColorRule,
@@ -21,6 +28,9 @@ function columns(value: unknown): PortColumnField[] {
         ),
       ]
     : [];
+}
+function sameColumns(a: PortColumnField[], b: readonly PortColumnField[]) {
+  return a.length === b.length && a.every((field, index) => field === b[index]);
 }
 export function validateSortSpecs(value: unknown): SortSpec[] {
   if (!Array.isArray(value)) return [];
@@ -60,6 +70,39 @@ export function validateFacetFilters(value: unknown): FacetFilters {
   }
   return result;
 }
+export function validateConditionMode(value: unknown): ConditionMode {
+  return value === "any" ? "any" : "all";
+}
+export function validateFacetFieldModes(value: unknown): FacetFieldModes {
+  if (!value || typeof value !== "object") return {};
+  const result: FacetFieldModes = {};
+  for (const field of FACET_FIELDS) {
+    const mode = (value as Record<string, unknown>)[field];
+    if (mode === "all" || mode === "any") result[field] = mode;
+  }
+  return result;
+}
+function validateGroupExpansion(value: unknown): AppSettings["groupExpansion"] {
+  if (!value || typeof value !== "object")
+    return { defaultExpanded: true, exceptions: [] };
+  const record = value as Record<string, unknown>;
+  return {
+    defaultExpanded:
+      typeof record.defaultExpanded === "boolean"
+        ? record.defaultExpanded
+        : true,
+    exceptions: Array.isArray(record.exceptions)
+      ? [
+          ...new Set(
+            record.exceptions.filter(
+              (key): key is string =>
+                typeof key === "string" && key.length <= 4096,
+            ),
+          ),
+        ]
+      : [],
+  };
+}
 export function validateColorRules(value: unknown): PortColorRule[] {
   if (!Array.isArray(value)) return [];
   const ids = new Set<string>();
@@ -87,6 +130,8 @@ export function validateColorRules(value: unknown): PortColorRule[] {
       enabled: rule.enabled !== false,
       color: rule.color,
       filters: validateFacetFilters(rule.filters),
+      mode: validateConditionMode(rule.mode),
+      fieldModes: validateFacetFieldModes(rule.fieldModes),
       target:
         rule.target.kind === "row"
           ? { kind: "row" }
@@ -96,34 +141,45 @@ export function validateColorRules(value: unknown): PortColorRule[] {
   return result;
 }
 export function validateSettings(value: unknown): AppSettings {
-  if (!value || typeof value !== "object")
+  if (!value || typeof value !== "object" || Array.isArray(value))
     return structuredClone(DEFAULT_SETTINGS);
   const r = value as Record<string, unknown>;
   if (
     r.schemaVersion !== undefined &&
-    ![1, 2, 3, 4].includes(Number(r.schemaVersion))
+    (typeof r.schemaVersion !== "number" ||
+      ![1, 2, 3, 4, 5].includes(r.schemaVersion))
   )
     return structuredClone(DEFAULT_SETTINGS);
-  // Reject string/fractional schema tags rather than interpreting future data.
-  if (r.schemaVersion !== undefined && typeof r.schemaVersion !== "number")
-    return structuredClone(DEFAULT_SETTINGS);
+  const version = typeof r.schemaVersion === "number" ? r.schemaVersion : 0;
+  const storedOrder = columns(r.columnOrder);
+  const oldDefaultOrder = sameColumns(storedOrder, LEGACY_V4_COLUMN_ORDER);
+  const oldDefaultVisible = sameColumns(
+    columns(r.visibleColumns),
+    LEGACY_V4_VISIBLE_COLUMNS,
+  );
+  const hasStoredVisible = Array.isArray(r.visibleColumns);
   let visible = Array.isArray(r.visibleColumns)
     ? columns(r.visibleColumns)
     : [...DEFAULT_SETTINGS.visibleColumns];
-  if (r.schemaVersion === 1 && !visible.includes("attribution"))
+  if (
+    hasStoredVisible &&
+    r.schemaVersion === 1 &&
+    !visible.includes("attribution")
+  )
     visible.splice(
       Math.max(0, visible.indexOf("process_name")),
       0,
       "attribution",
     );
-  if (r.schemaVersion === 1 || r.schemaVersion === 2) {
+  if (hasStoredVisible && (r.schemaVersion === 1 || r.schemaVersion === 2)) {
     if (visible.includes("local_port") && !visible.includes("role"))
       visible.splice(visible.indexOf("local_port") + 1, 0, "role");
     if (visible.includes("attribution") && !visible.includes("service_manager"))
       visible.splice(visible.indexOf("attribution"), 0, "service_manager");
   }
   if (
-    r.schemaVersion !== 4 &&
+    hasStoredVisible &&
+    version < 4 &&
     (visible.includes("attribution") || visible.includes("process_name"))
   ) {
     visible = [
@@ -136,10 +192,21 @@ export function validateSettings(value: unknown): AppSettings {
     if (visible.includes("remote_address") && !visible.includes("remote_host"))
       visible.splice(visible.indexOf("remote_address"), 0, "remote_host");
   }
-  const order = columns(r.columnOrder);
+  // Only migrate untouched defaults. Custom order and hidden columns remain intentional.
+  const order =
+    version < 5 && oldDefaultOrder
+      ? [...DEFAULT_SETTINGS.columnOrder]
+      : storedOrder;
+  if (
+    version < 5 &&
+    oldDefaultVisible &&
+    (oldDefaultOrder || !storedOrder.length)
+  )
+    visible = [...DEFAULT_SETTINGS.visibleColumns];
+  const ordered = new Set(order);
   const columnOrder = [
     ...order,
-    ...DEFAULT_SETTINGS.columnOrder.filter((field) => !order.includes(field)),
+    ...DEFAULT_SETTINGS.columnOrder.filter((field) => !ordered.has(field)),
   ];
   const widths: AppSettings["columnWidths"] = {};
   if (r.columnWidths && typeof r.columnWidths === "object")
@@ -154,7 +221,12 @@ export function validateSettings(value: unknown): AppSettings {
         );
     }
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
+    query: typeof r.query === "string" ? r.query.slice(0, 4096) : "",
+    facetFilters: validateFacetFilters(r.facetFilters),
+    filterMode: validateConditionMode(r.filterMode),
+    filterFieldModes: validateFacetFieldModes(r.filterFieldModes),
+    groupExpansion: validateGroupExpansion(r.groupExpansion),
     refreshIntervalMs: (typeof r.refreshIntervalMs === "number" &&
     [0, 1000, 2000, 5000, 10000, 30000, 60000].includes(r.refreshIntervalMs)
       ? r.refreshIntervalMs
@@ -165,10 +237,6 @@ export function validateSettings(value: unknown): AppSettings {
     language: (["zh-CN", "en-US", "system"].includes(String(r.language))
       ? r.language
       : "system") as AppSettings["language"],
-    maxEntries: (typeof r.maxEntries === "number" &&
-    [1000, 10000, 50000, 100000].includes(r.maxEntries)
-      ? r.maxEntries
-      : 50000) as AppSettings["maxEntries"],
     scanOnStartup:
       typeof r.scanOnStartup === "boolean" ? r.scanOnStartup : true,
     density: (["compact", "standard", "comfortable"].includes(String(r.density))

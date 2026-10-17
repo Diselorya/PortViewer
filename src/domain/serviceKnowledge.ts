@@ -1,5 +1,5 @@
 import type { HostContext, ServiceProfile } from "../types/knowledge";
-import type { PortEntry } from "../types/port";
+import type { PortEntry, ServiceAttribution } from "../types/port";
 import type { AppLocale } from "../i18n";
 
 export interface EntryDisplay {
@@ -15,6 +15,55 @@ const roles = ["workload", "launcher", "runtime", "manager", "system"];
 const EMPTY_PROFILES: ReadonlyMap<string, ServiceProfile> = new Map();
 const EMPTY_HOSTS: ReadonlyMap<string, HostContext> = new Map();
 
+const attributionCategories: Record<ServiceAttribution["kind"], string> = {
+  DockerContainer: "容器",
+  NginxSite: "网站",
+  IisSite: "网站",
+  IisAppPool: "应用池",
+  NssmService: "系统服务",
+  WindowsService: "Windows 服务",
+  SystemdService: "系统服务",
+  SystemProcess: "程序",
+  NodeApplication: "项目",
+  PythonApplication: "项目",
+};
+const profileCategories: Record<ServiceProfile["component_role"], string> = {
+  workload: "应用",
+  launcher: "启动程序",
+  runtime: "运行时",
+  manager: "服务管理器",
+  system: "系统程序",
+};
+/** A category explains known evidence without inventing a translation or purpose. */
+function serviceName(
+  entry: PortEntry,
+  profile: ServiceProfile | undefined,
+  evidence: ServiceAttribution | undefined,
+  catalogCandidate: boolean,
+  locale: AppLocale,
+): string {
+  const original =
+    profile?.original_name?.trim() ||
+    evidence?.name?.trim() ||
+    entry.process_name?.trim();
+  if (!original) return locale === "zh-CN" ? "归属未知" : "Unknown service";
+  if (locale !== "zh-CN") return original;
+  const candidatePrefix =
+    profile?.identity_match === "candidate" ? "候选：" : "";
+  if (/\p{Script=Han}/u.test(original)) return candidatePrefix + original;
+  if (
+    profile?.display_name_zh?.trim() &&
+    (profile.identity_match === "confirmed" || catalogCandidate)
+  )
+    return candidatePrefix + profile.display_name_zh.trim();
+  const category = evidence
+    ? attributionCategories[evidence.kind]
+    : profile
+      ? profileCategories[profile.component_role]
+      : "进程";
+  return candidatePrefix + category + "：" + original;
+}
+
 /** Keep local workload purpose separate from public documentation of its runtime. */
 export function displayEntry(
   entry: PortEntry,
@@ -29,24 +78,26 @@ export function displayEntry(
       (a, b) =>
         roles.indexOf(a.component_role) - roles.indexOf(b.component_role),
     );
-  const primary = details[0];
+  const localEvidence =
+    entry.attributions?.find((item) => item.kind !== "SystemProcess") ??
+    entry.attributions?.[0];
+  const localWorkload = localEvidence && localEvidence.kind !== "SystemProcess";
+  const primary =
+    details.find((profile) => profile.component_role === "workload") ??
+    (localWorkload ? undefined : details[0]);
   const catalogCandidate =
     primary?.identity_match === "candidate" &&
     primary.sources.some((source) => source.kind === "catalog");
-  const localEvidence = entry.attributions?.[0];
   const local = hosts.get("") ?? hosts.get(entry.local_address);
   const remote = entry.remote_address ? hosts.get(entry.remote_address) : null;
   return {
-    serviceName:
-      (locale === "zh-CN" &&
-      primary?.display_name_zh &&
-      (primary.identity_match === "confirmed" || catalogCandidate)
-        ? (catalogCandidate ? "候选：" : "") + primary.display_name_zh
-        : null) ||
-      primary?.original_name ||
-      localEvidence?.name ||
-      entry.process_name ||
-      (locale === "zh-CN" ? "归属未知" : "Unknown service"),
+    serviceName: serviceName(
+      entry,
+      primary,
+      localEvidence,
+      Boolean(catalogCandidate),
+      locale,
+    ),
     serviceDescription:
       primary?.summary ||
       (primary?.identity_match === "confirmed" && primary.software_summary

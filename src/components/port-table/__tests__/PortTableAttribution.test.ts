@@ -77,7 +77,9 @@ describe("port workload summary", () => {
     store.hasScanned = true;
     store.entries = [entry];
     const wrapper = render();
-    expect(wrapper.get(".service-name-action b").text()).toBe("warehouse-api");
+    expect(wrapper.get(".service-name-action b").text()).toBe(
+      "容器：warehouse-api",
+    );
     expect(wrapper.get(".service-description").text()).toBe("仓库库存查询 API");
     await wrapper.get(".owner-cell").trigger("click");
     expect(store.selectedDetail?.kind).toBe("service");
@@ -99,8 +101,10 @@ describe("port workload summary", () => {
         attributions: [],
       },
     ];
-    const owner = render().get(".owner-cell");
-    expect(owner.text()).toContain("归属未知");
+    const wrapper = render();
+    const owner = wrapper.get(".owner-cell");
+    expect(wrapper.get(".service-name-action").text()).toContain("归属未知");
+    expect(owner.text()).toContain("未获取");
     expect(store.entries[0]?.process_status).toBe("AccessDenied");
     expect(owner.text()).not.toContain("System");
   });
